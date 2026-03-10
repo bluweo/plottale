@@ -1,0 +1,25 @@
+{
+  "name": "plottale",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 4201",
+    "build": "next build",
+    "start": "next start -p 4201"
+  },
+  "dependencies": {
+    "iconsax-react": "^0.0.8",
+    "next": "16.1.6",
+    "prism-react-renderer": "^2.4.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4.2.1",
+    "typescript": "^5"
+  }
+}
