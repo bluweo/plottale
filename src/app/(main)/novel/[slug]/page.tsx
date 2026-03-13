@@ -254,7 +254,7 @@ function CastStrip({
   lang,
 }: {
   characters: PlottaleCharacter[];
-  lang: "en" | "th";
+  lang: string;
 }) {
   if (characters.length === 0) return null;
   return (

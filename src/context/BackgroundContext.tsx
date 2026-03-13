@@ -121,6 +121,8 @@ interface BackgroundContextValue {
   currentBg: string;
   currentBgId: string;
   currentBgType: BgType;
+  /** Whether the current background appears visually dark (video, dark images, dark colors) */
+  isDarkBg: boolean;
   hydrated: boolean;
   setBg: (id: string, src: string, type?: BgType) => void;
   pickerOpen: boolean;
@@ -180,6 +182,33 @@ function saveStored(theme: "light" | "dark", bg: StoredBackground) {
 /* ------------------------------------------------------------------ */
 /*  Context                                                            */
 /* ------------------------------------------------------------------ */
+
+/* ------------------------------------------------------------------ */
+/*  Background brightness detection                                    */
+/* ------------------------------------------------------------------ */
+
+function detectDarkBg(bgType: BgType, bgSrc: string, bgId: string): boolean {
+  // Videos always have a 30% black overlay → dark
+  if (bgType === "video") return true;
+
+  // Images: check folder path convention
+  if (bgType === "image") {
+    if (bgSrc.includes("/dark/")) return true;
+    if (bgSrc.includes("/light/")) return false;
+    // Fallback: check id prefix
+    if (bgId.startsWith("dark:")) return true;
+    return false;
+  }
+
+  // Color backgrounds: check theme tag on preset
+  if (bgType === "color") {
+    const preset = COLOR_BACKGROUNDS.find((c) => c.id === bgId);
+    if (preset?.theme === "dark") return true;
+    if (preset?.theme === "light") return false;
+  }
+
+  return false;
+}
 
 const BackgroundContext = createContext<BackgroundContextValue | null>(null);
 
@@ -248,9 +277,11 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const openPicker = useCallback(() => setPickerOpen(true), []);
   const closePicker = useCallback(() => setPickerOpen(false), []);
 
+  const isDarkBg = detectDarkBg(currentBgType, currentBg, currentBgId);
+
   return (
     <BackgroundContext.Provider
-      value={{ currentBg, currentBgId, currentBgType, hydrated, setBg, pickerOpen, openPicker, closePicker }}
+      value={{ currentBg, currentBgId, currentBgType, isDarkBg, hydrated, setBg, pickerOpen, openPicker, closePicker }}
     >
       {children}
     </BackgroundContext.Provider>

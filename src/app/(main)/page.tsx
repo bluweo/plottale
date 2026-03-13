@@ -34,6 +34,7 @@ import {
   Gallery as GalleryIcon,
 } from "iconsax-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useBackground } from "@/context/BackgroundContext";
 import { useLocalizedHref } from "@/hooks/useLocalizedHref";
 import {
   type PlottaleNovel,
@@ -122,21 +123,11 @@ const THAI_HEADER_STYLE = { fontFamily: THAI_HEADER_FONT, lineHeight: 1.35 } as 
 
 function HeroSection() {
   const { t, lang } = useLanguage();
+  const { isDarkBg } = useBackground();
   const lhref = useLocalizedHref();
   const isThai = lang === "th";
   const [activeIdx, setActiveIdx] = useState(0);
   const [fade, setFade] = useState(true);
-
-  /* Detect dark mode */
-  const [isDark, setIsDark] = useState(false);
-  useEffect(() => {
-    const check = () =>
-      setIsDark(document.documentElement.getAttribute("data-theme") === "dark");
-    check();
-    const obs = new MutationObserver(check);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => obs.disconnect();
-  }, []);
 
   /* Auto-rotate slides */
   useEffect(() => {
@@ -151,7 +142,8 @@ function HeroSection() {
   }, []);
 
   const current = HERO_SLIDES[activeIdx];
-  const gradientBg = isDark ? current.gradientDark : current.gradient;
+  /* Dark bg → white text, light bg → gradient text */
+  const useWhiteText = isDarkBg;
 
   return (
     <section className="relative flex flex-col items-center text-center px-4 pt-32 pb-16 md:pt-40 md:pb-24 lg:pt-44 lg:pb-28 lg:pl-24">
@@ -159,7 +151,7 @@ function HeroSection() {
       <p
         className="text-[12px] md:text-[13px] font-[600] tracking-[0.12em] uppercase mb-4"
         style={{
-          color: current.eyebrowColor,
+          color: useWhiteText ? "rgba(255,255,255,0.85)" : current.eyebrowColor,
           transition: "opacity 500ms ease-out, transform 500ms ease-out, color 600ms ease-out",
           opacity: fade ? 1 : 0,
           transform: fade ? "translateY(0)" : "translateY(-8px)",
@@ -171,10 +163,15 @@ function HeroSection() {
       {/* Headline carousel */}
       <div className="relative w-full max-w-[900px]" style={{ minHeight: "clamp(80px, 15vw, 160px)" }}>
         <h1
-          className="text-[36px] md:text-[52px] lg:text-[64px] xl:text-[72px] font-[850] tracking-[-0.04em] leading-[1.05] whitespace-pre-line bg-clip-text [-webkit-text-fill-color:transparent]"
+          className={[
+            "text-[36px] md:text-[52px] lg:text-[64px] xl:text-[72px] font-[850] tracking-[-0.04em] leading-[1.05] whitespace-pre-line",
+            useWhiteText ? "" : "bg-clip-text [-webkit-text-fill-color:transparent]",
+          ].join(" ")}
           style={{
-            backgroundImage: gradientBg,
-            transition: "opacity 500ms ease-out, transform 500ms ease-out, filter 500ms ease-out, background-image 600ms ease-out",
+            ...(useWhiteText
+              ? { color: "#ffffff", textShadow: "0 2px 20px rgba(0,0,0,0.3)" }
+              : { backgroundImage: current.gradient }),
+            transition: "opacity 500ms ease-out, transform 500ms ease-out, filter 500ms ease-out, background-image 600ms ease-out, color 600ms ease-out",
             opacity: fade ? 1 : 0,
             transform: fade ? "translateY(0)" : "translateY(12px)",
             filter: fade ? "blur(0px)" : "blur(4px)",
@@ -187,9 +184,10 @@ function HeroSection() {
 
       {/* Subheading */}
       <p
-        className="mt-5 md:mt-6 text-[15px] md:text-[17px] font-[450] text-gray-500 dark:text-white/60 max-w-[560px] leading-[1.6]"
+        className="mt-5 md:mt-6 text-[15px] md:text-[17px] font-[450] max-w-[560px] leading-[1.6]"
         style={{
-          transition: "opacity 500ms ease-out, transform 500ms ease-out",
+          color: useWhiteText ? "rgba(255,255,255,0.75)" : "rgb(107 114 128)",
+          transition: "opacity 500ms ease-out, transform 500ms ease-out, color 600ms ease-out",
           opacity: fade ? 1 : 0,
           transform: fade ? "translateY(0)" : "translateY(8px)",
         }}
@@ -215,7 +213,7 @@ function HeroSection() {
               height: 8,
               background: i === activeIdx
                 ? slide.eyebrowColor
-                : (isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)"),
+                : (useWhiteText ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)"),
               opacity: i === activeIdx ? 1 : 0.6,
             }}
             aria-label={`Slide ${i + 1}`}
@@ -239,7 +237,13 @@ function HeroSection() {
         </Link>
         <Link
           href={lhref("/create")}
-          className="h-12 px-7 rounded-full text-[14px] font-[650] text-black dark:text-white flex items-center gap-2 cursor-pointer border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
+          className="h-12 px-7 rounded-full text-[14px] font-[650] flex items-center gap-2 cursor-pointer bg-transparent transition-all duration-200"
+          style={{
+            color: useWhiteText ? "white" : "black",
+            borderWidth: 1,
+            borderStyle: "solid",
+            borderColor: useWhiteText ? "rgba(255,255,255,0.6)" : "black",
+          }}
         >
           <Add size={16} variant="Linear" color="currentColor" />
           {t("pt.hero.cta.create")}
@@ -251,8 +255,9 @@ function HeroSection() {
         {HERO_PILLS.map((item, i) => (
           <div
             key={item.labelKey}
-            className="glass-panel flex items-center justify-center px-6 py-3 md:px-7 md:py-3.5 text-[14px] md:text-[15px] font-[580] text-gray-600 dark:text-white/70 hover:text-gray-900 dark:hover:text-white hover:scale-[1.06] transition-all duration-300 cursor-default !rounded-full"
+            className="glass-panel flex items-center justify-center px-6 py-3 md:px-7 md:py-3.5 text-[14px] md:text-[15px] font-[580] hover:scale-[1.06] transition-all duration-300 cursor-default !rounded-full"
             style={{
+              color: "rgb(75 85 99)",
               animation: `cardEnter 0.6s var(--ease-spring) ${i * 0.08}s both`,
             }}
           >

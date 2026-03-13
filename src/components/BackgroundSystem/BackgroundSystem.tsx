@@ -21,15 +21,18 @@ export function BackgroundSystem() {
           ) : null;
         })()
       ) : currentBgType === "video" ? (
-        <video
-          key={currentBg}
-          src={currentBg}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover object-center"
-        />
+        <>
+          <video
+            key={currentBg}
+            src={currentBg}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover object-center"
+          />
+          <div className="absolute inset-0 bg-black/30" />
+        </>
       ) : (
         /* eslint-disable-next-line @next/next/no-img-element */
         <img

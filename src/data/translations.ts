@@ -5,7 +5,7 @@
 
 import type { Locale } from "@/lib/i18n";
 
-export const translations: Record<string, Record<Locale, string>> = {
+export const translations: Record<string, Partial<Record<Locale, string>>> = {
   /* ── Nav labels ── */
   "nav.home":       { en: "Home",       th: "หน้าแรก" },
   "nav.token":      { en: "Token",      th: "โทเคน" },

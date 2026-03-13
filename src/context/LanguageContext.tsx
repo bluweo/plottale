@@ -126,11 +126,12 @@ export function LanguageProvider({
   );
 
   const toggleLang = useCallback(() => {
+    // Legacy toggle — cycles back to English from any non-English locale
     setLang(lang === "en" ? "th" : "en");
   }, [lang, setLang]);
 
   const t = useCallback(
-    (key: string): string => translations[key]?.[lang] ?? key,
+    (key: string): string => translations[key]?.[lang] ?? translations[key]?.["en"] ?? key,
     [lang],
   );
 

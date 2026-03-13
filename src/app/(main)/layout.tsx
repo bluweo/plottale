@@ -29,17 +29,19 @@ async function resolveLocale(): Promise<Locale> {
   return DEFAULT_LOCALE;
 }
 
+/** Map locale code → OpenGraph locale string */
+const OG_LOCALE_MAP: Record<string, string> = {
+  en: "en_US", zh: "zh_CN", es: "es_ES", ja: "ja_JP", ko: "ko_KR",
+  pt: "pt_BR", id: "id_ID", th: "th_TH", vi: "vi_VN", fr: "fr_FR",
+  de: "de_DE", ar: "ar_SA", ru: "ru_RU", tr: "tr_TR",
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await resolveLocale();
 
-  const title =
-    locale === "th"
-      ? "Plottale \u2014 \u0e41\u0e1e\u0e25\u0e15\u0e1f\u0e2d\u0e23\u0e4c\u0e21\u0e19\u0e34\u0e22\u0e32\u0e22\u0e20\u0e32\u0e1e\u0e22\u0e19\u0e15\u0e23\u0e4c"
-      : "Plottale \u2014 The Cinematic Novel Platform";
-  const description =
-    locale === "th"
-      ? "\u0e2d\u0e48\u0e32\u0e19\u0e19\u0e34\u0e22\u0e32\u0e22\u0e20\u0e32\u0e1e\u0e22\u0e19\u0e15\u0e23\u0e4c \u0e1e\u0e39\u0e14\u0e04\u0e38\u0e22\u0e01\u0e31\u0e1a\u0e15\u0e31\u0e27\u0e25\u0e30\u0e04\u0e23 AI \u0e2a\u0e23\u0e49\u0e32\u0e07\u0e08\u0e31\u0e01\u0e23\u0e27\u0e32\u0e25\u0e02\u0e2d\u0e07\u0e04\u0e38\u0e13\u0e40\u0e2d\u0e07"
-      : "Read cinematic novels, chat with AI characters, and create your own universe.";
+  // Mock: always use English title/description regardless of locale
+  const title = "Plottale \u2014 The Cinematic Novel Platform";
+  const description = "Read cinematic novels, chat with AI characters, and create your own universe.";
 
   const languages: Record<string, string> = {};
   for (const loc of LOCALES) {
@@ -47,14 +49,19 @@ export async function generateMetadata(): Promise<Metadata> {
   }
   languages["x-default"] = `${BASE_URL}/en`;
 
+  const ogLocale = OG_LOCALE_MAP[locale] ?? "en_US";
+  const alternateLocale = LOCALES
+    .filter((l) => l !== locale)
+    .map((l) => OG_LOCALE_MAP[l] ?? "en_US");
+
   return {
     title,
     description,
     openGraph: {
       title,
       description,
-      locale: locale === "th" ? "th_TH" : "en_US",
-      alternateLocale: locale === "th" ? ["en_US"] : ["th_TH"],
+      locale: ogLocale,
+      alternateLocale,
       url: `${BASE_URL}/${locale}`,
       siteName: "Plottale",
     },

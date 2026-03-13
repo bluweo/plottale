@@ -360,7 +360,7 @@ function countActive(f: Filters): number {
   return c;
 }
 
-function applyFilters(novels: PlottaleNovel[], filters: Filters, search: string, sort: string, lang: "en" | "th"): PlottaleNovel[] {
+function applyFilters(novels: PlottaleNovel[], filters: Filters, search: string, sort: string, lang: string): PlottaleNovel[] {
   let result = [...novels];
 
   // Search

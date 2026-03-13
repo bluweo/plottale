@@ -11,10 +11,10 @@
 /*  Bilingual Primitives                                               */
 /* ================================================================== */
 
-export type LocalizedString = { en: string; th: string };
+export type LocalizedString = { en: string; th: string; [key: string]: string | undefined };
 
-/** Resolve a LocalizedString to the active language. */
-export function localize(ls: LocalizedString, lang: "en" | "th"): string {
+/** Resolve a LocalizedString to the active language (falls back to English). */
+export function localize(ls: LocalizedString, lang: string): string {
   return ls[lang] ?? ls.en;
 }
 
