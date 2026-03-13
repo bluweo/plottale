@@ -412,7 +412,7 @@ function LanguagePicker({ isDarkBg }: { isDarkBg: boolean }) {
           {/* Panel */}
           <div
             ref={panelRef}
-            className="glass-panel fixed z-[100] p-8 overflow-hidden"
+            className="glass-panel fixed z-[100] p-8 overflow-y-auto overscroll-contain"
             style={{
               top: "50%",
               left: "50%",
@@ -424,6 +424,7 @@ function LanguagePicker({ isDarkBg }: { isDarkBg: boolean }) {
               transition: "opacity 250ms ease, transform 250ms var(--transition-apple)",
               width: "min(640px, calc(100vw - 48px))",
               maxHeight: "min(520px, calc(100vh - 96px))",
+              WebkitOverflowScrolling: "touch",
             }}
           >
             {/* Grid: 3 columns for regions */}
@@ -431,7 +432,7 @@ function LanguagePicker({ isDarkBg }: { isDarkBg: boolean }) {
               {LANGUAGE_REGIONS.map((region) => (
                 <div key={region.region}>
                   {/* Region header */}
-                  <h3 className="text-[13px] font-[700] text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">
+                  <h3 className="text-[13px] font-[700] text-black dark:text-white uppercase tracking-wider mb-4">
                     {region.region}
                   </h3>
                   {/* Language list */}
@@ -446,27 +447,30 @@ function LanguagePicker({ isDarkBg }: { isDarkBg: boolean }) {
                             setOpen(false);
                           }}
                           className={[
-                            "relative flex flex-col items-start px-3.5 py-2.5 rounded-[10px] text-left transition-all duration-200 cursor-pointer",
+                            "group/lang relative flex flex-col items-start px-3.5 py-2.5 rounded-[10px] text-left transition-all duration-200 cursor-pointer",
                             isSelected
-                              ? "bg-white/60 dark:bg-white/[0.08]"
-                              : "hover:bg-white/30 dark:hover:bg-white/[0.04]",
+                              ? "bg-gray-900 dark:bg-white"
+                              : "hover:bg-white dark:hover:bg-black",
                           ].join(" ")}
                         >
-                          {/* Active indicator bar */}
-                          {isSelected && (
-                            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] rounded-full bg-[#3700FF] dark:bg-white" />
-                          )}
                           <span
                             className={[
-                              "text-[14px] font-[600] leading-tight",
+                              "text-[14px] font-[600] leading-tight transition-colors duration-200",
                               isSelected
-                                ? "text-gray-900 dark:text-white"
-                                : "text-gray-700 dark:text-gray-300",
+                                ? "text-white dark:text-gray-900"
+                                : "text-gray-700 dark:text-gray-300 group-hover/lang:text-gray-900 dark:group-hover/lang:text-white",
                             ].join(" ")}
                           >
                             {l.native}
                           </span>
-                          <span className="text-[11px] font-[450] text-gray-400 dark:text-gray-500 mt-0.5">
+                          <span
+                            className={[
+                              "text-[11px] font-[450] mt-0.5 transition-colors duration-200",
+                              isSelected
+                                ? "text-white/60 dark:text-gray-900/50"
+                                : "text-gray-400 dark:text-gray-500 group-hover/lang:text-gray-900/50 dark:group-hover/lang:text-white/60",
+                            ].join(" ")}
+                          >
                             {l.english}
                           </span>
                         </button>
@@ -731,7 +735,7 @@ export function PlottaleShell({
           "max-[1024px]:p-1.5",
         ].join(" ")}
         style={{
-          background: isDark ? "rgba(25, 25, 35, 0.5)" : "rgba(255, 255, 255, 0.5)",
+          background: "var(--glass-bg)",
           backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
           WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
           border: "1px solid var(--glass-border)",

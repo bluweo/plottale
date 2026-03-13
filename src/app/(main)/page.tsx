@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -80,6 +80,52 @@ const GLASS_STYLE: React.CSSProperties = {
   border: "1px solid var(--glass-border)",
   boxShadow: "var(--glass-shadow)",
 };
+
+/** Inner-card glass — +20% opacity vs section wrapper, capped at 100% */
+const GLASS_STYLE_INNER: React.CSSProperties = {
+  borderRadius: "var(--glass-radius-lg)",
+  background: "var(--glass-bg-strong)",
+  backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+  WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+  border: "1px solid var(--glass-border)",
+  boxShadow: "var(--glass-shadow)",
+};
+
+/* ================================================================== */
+/*  Masonry helper — flexbox-based (Safari-safe, no CSS columns)       */
+/* ================================================================== */
+
+const MASONRY_BREAKPOINTS = [
+  { min: 1440, cols: 6 },
+  { min: 1280, cols: 5 },
+  { min: 1024, cols: 4 },
+  { min: 768,  cols: 3 },
+  { min: 640,  cols: 2 },
+  { min: 0,    cols: 1 },
+];
+
+function useMasonryColumns() {
+  const [cols, setCols] = useState(1);
+  useEffect(() => {
+    const calc = () => {
+      const w = window.innerWidth;
+      for (const bp of MASONRY_BREAKPOINTS) {
+        if (w >= bp.min) { setCols(bp.cols); return; }
+      }
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    return () => window.removeEventListener("resize", calc);
+  }, []);
+  return cols;
+}
+
+/** Distribute items round-robin into column buckets */
+function distributeToColumns<T>(items: T[], colCount: number): T[][] {
+  const buckets: T[][] = Array.from({ length: colCount }, () => []);
+  items.forEach((item, i) => buckets[i % colCount].push(item));
+  return buckets;
+}
 
 /* ================================================================== */
 /*  SECTION 1 — HERO                                                   */
@@ -378,9 +424,9 @@ function ImageCarousel({
         ))}
       </div>
 
-      {/* Dot indicators — at TOP of image */}
+      {/* Dot indicators — at BOTTOM of image */}
       {totalSlides > 1 && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
           {images.map((_, idx) => (
             <button
               key={idx}
@@ -429,24 +475,6 @@ function NovelCard({ novel, index }: { novel: PlottaleNovel; index: number }) {
   const lhref = useLocalizedHref();
   const [hovered, setHovered] = useState(false);
 
-  /* Detect dark mode (class-based) */
-  const [isDark, setIsDark] = useState(false);
-  useEffect(() => {
-    const check = () => setIsDark(document.documentElement.classList.contains("dark"));
-    check();
-    const obs = new MutationObserver(check);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-
-  /* Theme-inverted colors on hover */
-  const hoverBg = hovered
-    ? isDark ? "rgba(255,255,255,0.95)" : "rgba(15,15,20,0.95)"
-    : undefined;
-  const hoverTitle = hovered
-    ? isDark ? "#111827" : "#ffffff"
-    : undefined;
-
   return (
     <Link
       href={lhref(`/novel/${novel.slug}`)}
@@ -461,39 +489,12 @@ function NovelCard({ novel, index }: { novel: PlottaleNovel; index: number }) {
       <div
         className="overflow-hidden flex flex-col transition-all duration-500 ease-out"
         style={{
-          ...GLASS_STYLE,
+          ...GLASS_STYLE_INNER,
           border: "none",
           transform: hovered ? "scale(1.3)" : "scale(1)",
           transformOrigin: "center center",
-          ...(hoverBg ? { background: hoverBg } : {}),
         }}
       >
-        {/* ── Top-right arrow on hover ── */}
-        <div
-          className="absolute top-0 right-0 transition-all duration-500 ease-out"
-          style={{
-            paddingTop: "calc(10px + var(--glass-radius-lg) * 0.4)",
-            paddingRight: "calc(10px + var(--glass-radius-lg) * 0.4)",
-            opacity: hovered ? 1 : 0,
-            transform: hovered ? "translate(0, 0) scale(1)" : "translate(-4px, 4px) scale(0.5)",
-          }}
-        >
-          <ExportSquare size={22} variant="Linear" color={hoverTitle ?? "currentColor"} />
-        </div>
-
-        {/* ── Top section: title only (constant height) ── */}
-        <div className="text-left" style={{ paddingTop: "calc(10px + var(--glass-radius-lg) * 0.4)", paddingBottom: "calc(6px + var(--glass-radius-lg) * 0.15)", paddingLeft: "calc(16px + var(--glass-radius-lg) * 0.5)", paddingRight: "calc(16px + var(--glass-radius-lg) * 0.5)" }}>
-          <h3
-            className="text-[17px] md:text-[18px] font-[750] text-gray-900 dark:text-white leading-[1.25] tracking-[-0.02em] line-clamp-1 transition-colors duration-300"
-            style={{
-              ...(hoverTitle ? { color: hoverTitle } : {}),
-              ...(lang === "th" ? THAI_HEADER_STYLE : {}),
-            }}
-          >
-            {localize(novel.title, lang)}
-          </h3>
-        </div>
-
         {/* ── Image carousel + hover overlay ── */}
         <div className="relative">
           <ImageCarousel
@@ -507,11 +508,22 @@ function NovelCard({ novel, index }: { novel: PlottaleNovel; index: number }) {
             className="absolute inset-x-0 top-0 z-20 transition-all duration-500 ease-out pointer-events-none"
             style={{
               background: "linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.72) 55%, rgba(0,0,0,0.4) 80%, transparent 100%)",
-              padding: "10px 12px 36px",
+              padding: "20px 12px 36px",
               opacity: hovered ? 1 : 0,
               transform: hovered ? "translateY(0)" : "translateY(-8px)",
             }}
           >
+            {/* Title + arrow */}
+            <div className="flex items-center justify-between mb-1.5">
+              <h3
+                className="text-[16px] font-[750] text-white leading-[1.25] tracking-[-0.02em] line-clamp-1"
+                style={lang === "th" ? THAI_HEADER_STYLE : undefined}
+              >
+                {localize(novel.title, lang)}
+              </h3>
+              <ExportSquare size={18} variant="Linear" color="rgba(255,255,255,0.8)" />
+            </div>
+
             {/* Author avatar + name */}
             <div className="flex items-center gap-2 mb-2">
               <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-white/20">
@@ -562,44 +574,46 @@ function NovelCardsSection() {
 
   return (
     <section className="px-4 md:px-8 lg:pl-28 lg:pr-10 xl:pl-32 xl:pr-12 pb-16 md:pb-24">
-      {/* Section header */}
-      <div className="flex items-end justify-between mb-8 max-w-[2400px] mx-auto">
-        <div>
-          <p className="text-[12px] font-[600] tracking-[0.1em] uppercase text-amber-500/80 mb-2">
-            {t("pt.novels.badge")}
-          </p>
-          <h2 className="text-[28px] md:text-[36px] font-[800] tracking-[-0.03em] text-gray-900 dark:text-white leading-tight" style={lang === "th" ? THAI_HEADER_STYLE : undefined}>
-            {t("pt.novels.title")}
-          </h2>
-          <p className="mt-2 text-[14px] font-[430] text-black/60 dark:text-white/60 max-w-[450px]">
-            {t("pt.novels.desc")}
-          </p>
+      <div style={GLASS_STYLE} className="max-w-[2400px] mx-auto p-5 md:p-8">
+        {/* Section header */}
+        <div className="flex items-end justify-between mb-8">
+          <div>
+            <p className="text-[12px] font-[600] tracking-[0.1em] uppercase text-black dark:text-amber-500 mb-2">
+              {t("pt.novels.badge")}
+            </p>
+            <h2 className="text-[28px] md:text-[36px] font-[800] tracking-[-0.03em] text-gray-900 dark:text-white leading-tight" style={lang === "th" ? THAI_HEADER_STYLE : undefined}>
+              {t("pt.novels.title")}
+            </h2>
+            <p className="mt-2 text-[14px] font-[430] text-black/60 dark:text-white/60 max-w-[450px]">
+              {t("pt.novels.desc")}
+            </p>
+          </div>
+          <Link
+            href={lhref("/novels")}
+            className="hidden md:flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
+          >
+            {t("pt.novels.viewall")}
+            <ArrowRight size={14} variant="Linear" color="currentColor" />
+          </Link>
         </div>
-        <Link
-          href={lhref("/novels")}
-          className="hidden md:flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
-        >
-          {t("pt.novels.viewall")}
-          <ArrowRight size={14} variant="Linear" color="currentColor" />
-        </Link>
-      </div>
 
-      {/* Cards grid — scales up to 8 columns on ultrawide */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-6 min-[1920px]:grid-cols-8 gap-3 md:gap-4 max-w-[2400px] mx-auto">
-        {novels.map((novel, i) => (
-          <NovelCard key={novel.id} novel={novel} index={i} />
-        ))}
-      </div>
+        {/* Cards grid — scales up to 8 columns on ultrawide */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-6 min-[1920px]:grid-cols-8 gap-3 md:gap-4">
+          {novels.map((novel, i) => (
+            <NovelCard key={novel.id} novel={novel} index={i} />
+          ))}
+        </div>
 
-      {/* Mobile view all link */}
-      <div className="flex justify-center mt-8 md:hidden">
-        <Link
-          href={lhref("/novels")}
-          className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
-        >
-          {t("pt.novels.viewall.mobile")}
-          <ArrowRight size={14} variant="Linear" color="currentColor" />
-        </Link>
+        {/* Mobile view all link */}
+        <div className="flex justify-center mt-8 md:hidden">
+          <Link
+            href={lhref("/novels")}
+            className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
+          >
+            {t("pt.novels.viewall.mobile")}
+            <ArrowRight size={14} variant="Linear" color="currentColor" />
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -665,7 +679,7 @@ function CharacterCard({
       <div
         className="overflow-hidden flex flex-col transition-all duration-500 ease-out"
         style={{
-          ...GLASS_STYLE,
+          ...GLASS_STYLE_INNER,
           border: "none",
           transform: hovered ? "scale(1.15)" : "scale(1)",
           transformOrigin: "center center",
@@ -826,47 +840,49 @@ function CharacterSection() {
 
   return (
     <section className="px-4 md:px-8 lg:pl-28 lg:pr-10 xl:pl-32 xl:pr-12 pb-16 md:pb-24">
-      {/* Section header */}
-      <div className="flex items-end justify-between mb-8 max-w-[2400px] mx-auto">
-        <div>
-          <p className="text-[12px] font-[600] tracking-[0.1em] uppercase text-amber-500/80 mb-2">
-            {t("pt.chars.badge")}
-          </p>
-          <h2
-            className="text-[28px] md:text-[36px] font-[800] tracking-[-0.03em] text-gray-900 dark:text-white leading-tight"
-            style={lang === "th" ? THAI_HEADER_STYLE : undefined}
+      <div style={GLASS_STYLE} className="max-w-[2400px] mx-auto p-5 md:p-8">
+        {/* Section header */}
+        <div className="flex items-end justify-between mb-8">
+          <div>
+            <p className="text-[12px] font-[600] tracking-[0.1em] uppercase text-black dark:text-amber-500 mb-2">
+              {t("pt.chars.badge")}
+            </p>
+            <h2
+              className="text-[28px] md:text-[36px] font-[800] tracking-[-0.03em] text-gray-900 dark:text-white leading-tight"
+              style={lang === "th" ? THAI_HEADER_STYLE : undefined}
+            >
+              {t("pt.chars.title")}
+            </h2>
+            <p className="mt-2 text-[14px] font-[430] text-black/60 dark:text-white/60 max-w-[450px]">
+              {t("pt.chars.desc")}
+            </p>
+          </div>
+          <Link
+            href={lhref("/characters")}
+            className="hidden md:flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
           >
-            {t("pt.chars.title")}
-          </h2>
-          <p className="mt-2 text-[14px] font-[430] text-black/60 dark:text-white/60 max-w-[450px]">
-            {t("pt.chars.desc")}
-          </p>
+            {t("pt.chars.viewall")}
+            <ArrowRight size={14} variant="Linear" color="currentColor" />
+          </Link>
         </div>
-        <Link
-          href={lhref("/characters")}
-          className="hidden md:flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
-        >
-          {t("pt.chars.viewall")}
-          <ArrowRight size={14} variant="Linear" color="currentColor" />
-        </Link>
-      </div>
 
-      {/* Character cards grid — ~2 rows with 10 cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-6 min-[1920px]:grid-cols-8 gap-3 md:gap-4 max-w-[2400px] mx-auto">
-        {characters.map((character, i) => (
-          <CharacterCard key={character.id} character={character} index={i} />
-        ))}
-      </div>
+        {/* Character cards grid — ~2 rows with 10 cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-6 min-[1920px]:grid-cols-8 gap-3 md:gap-4">
+          {characters.map((character, i) => (
+            <CharacterCard key={character.id} character={character} index={i} />
+          ))}
+        </div>
 
-      {/* Mobile view all link */}
-      <div className="flex justify-center mt-8 md:hidden">
-        <Link
-          href={lhref("/characters")}
-          className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
-        >
-          {t("pt.chars.viewall")}
-          <ArrowRight size={14} variant="Linear" color="currentColor" />
-        </Link>
+        {/* Mobile view all link */}
+        <div className="flex justify-center mt-8 md:hidden">
+          <Link
+            href={lhref("/characters")}
+            className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
+          >
+            {t("pt.chars.viewall")}
+            <ArrowRight size={14} variant="Linear" color="currentColor" />
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -1259,7 +1275,7 @@ function PostCard({ post, index }: { post: PlottalePost; index: number }) {
                 className="px-3.5 py-3"
                 style={{
                   borderRadius: "calc(var(--glass-radius-lg) * 0.6)",
-                  background: "var(--glass-bg)",
+                  background: "var(--glass-bg-strong)",
                   backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
                   WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
                   border: "1px solid var(--glass-border)",
@@ -1371,7 +1387,7 @@ function PostCard({ post, index }: { post: PlottalePost; index: number }) {
 
   return (
     <div
-      className="break-inside-avoid mb-4"
+      className="mb-4"
       style={{
         animation: `cardEnter 0.5s var(--ease-spring) ${index * 0.04}s both`,
         position: "relative",
@@ -1381,7 +1397,7 @@ function PostCard({ post, index }: { post: PlottalePost; index: number }) {
       <div
         className="relative transition-all duration-300 hover:scale-[1.015] hover:-translate-y-0.5 cursor-pointer"
         style={{
-          ...(post.type === "image" ? {} : GLASS_STYLE),
+          ...(post.type === "image" ? {} : GLASS_STYLE_INNER),
           border: "none",
         }}
         onClick={handleCardClick}
@@ -1400,7 +1416,7 @@ function FeedLinkCard({ index }: { index: number }) {
 
   return (
     <div
-      className="break-inside-avoid mb-4"
+      className="mb-4"
       style={{
         animation: `cardEnter 0.5s var(--ease-spring) ${index * 0.04}s both`,
       }}
@@ -1409,7 +1425,7 @@ function FeedLinkCard({ index }: { index: number }) {
         href={lhref("/feed")}
         className="block overflow-hidden transition-all duration-300 hover:scale-[1.015] hover:-translate-y-0.5 group"
         style={{
-          ...GLASS_STYLE,
+          ...GLASS_STYLE_INNER,
           minHeight: 240,
           border: "none",
         }}
@@ -1449,6 +1465,19 @@ function PostFeedSection() {
   const { t, lang } = useLanguage();
   const lhref = useLocalizedHref();
   const posts = getAllPosts();
+  const colCount = useMasonryColumns();
+
+  /* Build items array: all posts + the trailing link card */
+  const allItems = useMemo(() => {
+    const items: { type: "post"; post: PlottalePost; idx: number }[] =
+      posts.map((p, i) => ({ type: "post" as const, post: p, idx: i }));
+    return [...items, { type: "link" as const, idx: posts.length }];
+  }, [posts]);
+
+  const columns = useMemo(
+    () => distributeToColumns(allItems, colCount),
+    [allItems, colCount],
+  );
 
   return (
     <section className="px-4 md:px-8 lg:pl-28 lg:pr-10 xl:pl-32 xl:pr-12 pb-16 md:pb-24">
@@ -1462,52 +1491,59 @@ function PostFeedSection() {
         .play-pill { transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .play-pill:hover { transform: scale(1.35); }
       `}</style>
-      {/* Section header */}
-      <div className="flex items-end justify-between mb-8 max-w-[2400px] mx-auto">
-        <div>
-          <p className="text-[12px] font-[600] tracking-[0.1em] uppercase text-amber-500/80 mb-2">
-            {t("pt.feed.badge")}
-          </p>
-          <h2
-            className="text-[28px] md:text-[36px] font-[800] tracking-[-0.03em] text-gray-900 dark:text-white leading-tight"
-            style={lang === "th" ? THAI_HEADER_STYLE : undefined}
+      <div style={GLASS_STYLE} className="max-w-[2400px] mx-auto p-5 md:p-8">
+        {/* Section header */}
+        <div className="flex items-end justify-between mb-8">
+          <div>
+            <p className="text-[12px] font-[600] tracking-[0.1em] uppercase text-black dark:text-amber-500 mb-2">
+              {t("pt.feed.badge")}
+            </p>
+            <h2
+              className="text-[28px] md:text-[36px] font-[800] tracking-[-0.03em] text-gray-900 dark:text-white leading-tight"
+              style={lang === "th" ? THAI_HEADER_STYLE : undefined}
+            >
+              {t("pt.feed.title")}
+            </h2>
+            <p className="mt-2 text-[14px] font-[430] text-black/60 dark:text-white/60 max-w-[450px]">
+              {t("pt.feed.desc")}
+            </p>
+          </div>
+
+          {/* Desktop View All */}
+          <Link
+            href={lhref("/feed")}
+            className="hidden md:flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
           >
-            {t("pt.feed.title")}
-          </h2>
-          <p className="mt-2 text-[14px] font-[430] text-black/60 dark:text-white/60 max-w-[450px]">
-            {t("pt.feed.desc")}
-          </p>
+            {t("pt.feed.viewall")}
+            <ArrowRight size={14} variant="Linear" color="currentColor" />
+          </Link>
         </div>
 
-        {/* Desktop View All */}
-        <Link
-          href={lhref("/feed")}
-          className="hidden md:flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
-        >
-          {t("pt.feed.viewall")}
-          <ArrowRight size={14} variant="Linear" color="currentColor" />
-        </Link>
-      </div>
+        {/* Masonry grid — flexbox columns (Safari-safe) */}
+        <div className="flex gap-4">
+          {columns.map((col, ci) => (
+            <div key={ci} className="flex-1 min-w-0 flex flex-col">
+              {col.map((item) =>
+                item.type === "post" ? (
+                  <PostCard key={item.post.id} post={item.post} index={item.idx} />
+                ) : (
+                  <FeedLinkCard key="feed-link" index={item.idx} />
+                ),
+              )}
+            </div>
+          ))}
+        </div>
 
-      {/* Masonry grid */}
-      <div
-        className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 min-[1440px]:columns-6 gap-4 max-w-[2400px] mx-auto"
-      >
-        {posts.map((post, i) => (
-          <PostCard key={post.id} post={post} index={i} />
-        ))}
-        <FeedLinkCard index={posts.length} />
-      </div>
-
-      {/* Mobile View All */}
-      <div className="flex justify-center mt-8 md:hidden">
-        <Link
-          href={lhref("/feed")}
-          className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
-        >
-          {t("pt.feed.viewall.mobile")}
-          <ArrowRight size={14} variant="Linear" color="currentColor" />
-        </Link>
+        {/* Mobile View All */}
+        <div className="flex justify-center mt-8 md:hidden">
+          <Link
+            href={lhref("/feed")}
+            className="flex items-center gap-1.5 px-5 py-2.5 rounded-full text-[13px] font-[600] text-black dark:text-white border border-black dark:border-white bg-transparent hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all duration-200"
+          >
+            {t("pt.feed.viewall.mobile")}
+            <ArrowRight size={14} variant="Linear" color="currentColor" />
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -1556,7 +1592,10 @@ function BentoFeatureCard({
 
       {/* Text */}
       <div className="flex-1 flex flex-col">
-        <h3 className="text-[16px] md:text-[18px] font-[750] text-gray-900 dark:text-white tracking-[-0.01em] mb-2" style={lang === "th" ? THAI_HEADER_STYLE : undefined}>
+        <h3
+          className="text-[16px] md:text-[18px] font-[750] text-gray-900 dark:text-white tracking-[-0.01em] mb-2"
+          style={lang === "th" ? THAI_HEADER_STYLE : undefined}
+        >
           {localize(feature.title, lang)}
         </h3>
         <p className="text-[13px] font-[430] text-gray-500 dark:text-white/50 leading-[1.6] line-clamp-3">
@@ -1583,19 +1622,23 @@ function BentoFeatureCard({
 
 function BentoFeaturesSection() {
   const { t, lang } = useLanguage();
+  const { isDarkBg } = useBackground();
   const features = getAllFeatures();
 
   return (
     <section className="px-4 md:px-8 lg:pl-28 lg:pr-10 xl:pl-32 xl:pr-12 pb-20 md:pb-28">
       {/* Section header */}
       <div className="text-center mb-10 md:mb-14 max-w-7xl mx-auto">
-        <p className="text-[12px] font-[600] tracking-[0.1em] uppercase text-amber-500/80 mb-2">
+        <p className={`text-[12px] font-[600] tracking-[0.1em] uppercase mb-2 ${isDarkBg ? "text-white/70" : "text-amber-500/80"}`}>
           {t("pt.features.badge")}
         </p>
-        <h2 className="text-[28px] md:text-[36px] font-[800] tracking-[-0.03em] text-gray-900 dark:text-white leading-tight" style={lang === "th" ? THAI_HEADER_STYLE : undefined}>
+        <h2
+          className={`text-[28px] md:text-[36px] font-[800] tracking-[-0.03em] leading-tight ${isDarkBg ? "text-white" : "text-gray-900 dark:text-white"}`}
+          style={lang === "th" ? THAI_HEADER_STYLE : undefined}
+        >
           {t("pt.features.title")}
         </h2>
-        <p className="mt-3 text-[14px] md:text-[15px] font-[430] text-gray-500 dark:text-white/45 max-w-[500px] mx-auto leading-[1.6]">
+        <p className={`mt-3 text-[14px] md:text-[15px] font-[430] max-w-[500px] mx-auto leading-[1.6] ${isDarkBg ? "text-white/60" : "text-gray-500 dark:text-white/45"}`}>
           {t("pt.features.desc")}
         </p>
       </div>

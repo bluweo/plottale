@@ -40,7 +40,7 @@ interface AppearanceContextValue {
 /*  Defaults                                                           */
 /* ------------------------------------------------------------------ */
 
-const DEFAULT_TRANSPARENCY = 0.85;
+const DEFAULT_TRANSPARENCY = 0.64;
 const DEFAULT_RADIUS: RadiusPreset = "minimal";
 const DEFAULT_BLUR = 24;
 const DEFAULT_SHADOW: ShadowPreset = "soft";

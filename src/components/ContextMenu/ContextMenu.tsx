@@ -7,7 +7,6 @@ import { useAppearance } from "@/context/AppearanceContext";
 import {
   Image,
   Music,
-  Category,
   Setting4,
   Maximize4,
 } from "iconsax-react";
@@ -28,7 +27,6 @@ const ICON_PROPS = { size: 18, variant: "Linear" as const, color: "currentColor"
 const MENU_ITEMS: MenuItem[] = [
   { icon: <Image {...ICON_PROPS} />,          label: "Change Background", action: "change-bg" },
   { icon: <Music {...ICON_PROPS} />,          label: "Play Music",        action: "play-music" },
-  { icon: <Category {...ICON_PROPS} />,       label: "Add Widget" },
   { icon: <Setting4 {...ICON_PROPS} />,       label: "Appearance",        action: "appearance" },
   { icon: <Maximize4 {...ICON_PROPS} />,      label: "Fullscreen",       action: "fullscreen" },
 ];
