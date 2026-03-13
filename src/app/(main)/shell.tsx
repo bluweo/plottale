@@ -138,19 +138,27 @@ function GelCircleItem({
       href={lhref(href)}
       className={[
         "relative flex items-center justify-center w-14 h-14 rounded-[9999px] overflow-hidden",
-        "bg-white/40 backdrop-blur-sm border border-white/50",
-        "text-neutral-600 dark:text-white/80 hover:text-neutral-900 dark:hover:text-white",
-        "shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)]",
-        "hover:scale-110",
+        "hover:scale-105",
         "transition-all duration-300 ease-[var(--transition-apple)]",
-        active
-          ? "bg-white/60 text-neutral-900 dark:bg-white/25 dark:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_4px_12px_rgba(0,0,0,0.1)]"
-          : "hover:bg-white/55 dark:hover:bg-white/15",
         "max-[1024px]:w-12 max-[1024px]:h-12",
       ].join(" ")}
+      style={{
+        background: active
+          ? "rgba(255, 255, 255, 0.95)"
+          : "rgba(255, 255, 255, 0.12)",
+        border: active
+          ? "1px solid rgba(255, 255, 255, 0.9)"
+          : "1px solid rgba(255, 255, 255, 0.08)",
+        boxShadow: active
+          ? "0 2px 12px rgba(0,0,0,0.15)"
+          : "none",
+      }}
     >
-      <span className="relative z-3 flex items-center justify-center [&_svg]:w-[22px] [&_svg]:h-[22px] max-[1024px]:[&_svg]:w-[18px] max-[1024px]:[&_svg]:h-[18px]">
-        <Icon size={22} variant="Linear" color="currentColor" />
+      <span
+        className="relative z-3 flex items-center justify-center [&_svg]:w-[22px] [&_svg]:h-[22px] max-[1024px]:[&_svg]:w-[18px] max-[1024px]:[&_svg]:h-[18px]"
+        style={{ color: active ? "#1a1a1a" : "rgba(255, 255, 255, 0.85)" }}
+      >
+        <Icon size={22} variant={active ? "Bulk" : "Linear"} color="currentColor" />
       </span>
     </Link>
   );
@@ -254,20 +262,28 @@ function GelCircleWithComponentMenu({
       {/* ── Glass circle (stays circle, no expand) ── */}
       <div
         className={[
-          "relative flex items-center justify-center w-14 h-14 rounded-[9999px] overflow-hidden",
-          "bg-white/40 backdrop-blur-sm border border-white/50",
-          "text-neutral-600 dark:text-white/80 hover:text-neutral-900 dark:hover:text-white cursor-pointer",
-          "shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)]",
-          "hover:scale-110",
+          "relative flex items-center justify-center w-14 h-14 rounded-[9999px] overflow-hidden cursor-pointer",
+          "hover:scale-105",
           "transition-all duration-300 ease-[var(--transition-apple)]",
-          active
-            ? "bg-white/60 text-neutral-900 dark:bg-white/25 dark:text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_4px_12px_rgba(0,0,0,0.1)]"
-            : "hover:bg-white/55 dark:hover:bg-white/15",
           "max-[1024px]:h-12 max-[1024px]:w-12",
         ].join(" ")}
+        style={{
+          background: active
+            ? "rgba(255, 255, 255, 0.95)"
+            : "rgba(255, 255, 255, 0.12)",
+          border: active
+            ? "1px solid rgba(255, 255, 255, 0.9)"
+            : "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow: active
+            ? "0 2px 12px rgba(0,0,0,0.15)"
+            : "none",
+        }}
       >
-        <span className="relative z-3 flex items-center justify-center [&_svg]:w-[22px] [&_svg]:h-[22px]">
-          <Icon size={22} variant="Linear" color="currentColor" />
+        <span
+          className="relative z-3 flex items-center justify-center [&_svg]:w-[22px] [&_svg]:h-[22px]"
+          style={{ color: active ? "#1a1a1a" : "rgba(255, 255, 255, 0.85)" }}
+        >
+          <Icon size={22} variant={active ? "Bulk" : "Linear"} color="currentColor" />
         </span>
       </div>
 
@@ -523,14 +539,13 @@ export function PlottaleShell({
         <UserMenu />
       </div>
 
-      {/* ── Floating gel panel nav ── */}
+      {/* ── Floating glass panel nav ── */}
       <nav
         className={[
-          "gel-glass",
           "fixed left-4 top-1/2 -translate-y-1/2 z-50",
           "flex flex-col items-start gap-1.5 p-2",
           "rounded-[9999px]",
-          "!overflow-visible",
+          "overflow-visible",
           "hover:!scale-100 hover:!translate-y-[-50%]",
           "max-[1024px]:left-1/2 max-[1024px]:-translate-x-1/2",
           "max-[1024px]:top-auto max-[1024px]:bottom-6 max-[1024px]:translate-y-0",
@@ -539,8 +554,14 @@ export function PlottaleShell({
           "max-[1024px]:rounded-[9999px]",
           "max-[1024px]:p-1.5",
         ].join(" ")}
+        style={{
+          background: "rgba(60, 60, 60, 0.45)",
+          backdropFilter: "blur(40px) saturate(1.6)",
+          WebkitBackdropFilter: "blur(40px) saturate(1.6)",
+          border: "1px solid rgba(255, 255, 255, 0.12)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08)",
+        }}
       >
-        <div className="gel-glass-shine rounded-[inherit]" />
         {NAV_ITEMS.map((item) => {
           const isActive = item.exact
             ? barePath === item.href

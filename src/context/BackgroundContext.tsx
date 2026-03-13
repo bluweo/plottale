@@ -133,7 +133,7 @@ interface BackgroundContextValue {
 /* ------------------------------------------------------------------ */
 
 const THEME_DEFAULTS = {
-  light: { id: "light:moutain", src: "/backgrounds/light/moutain.jpg", type: "image" as BgType },
+  light: { id: "light:girl-rollerblade", src: "/video-backgrounds/light/girl-rollerblade.mp4", type: "video" as BgType },
   dark:  { id: "dark:night-moutain", src: "/backgrounds/dark/night-moutain.jpg", type: "image" as BgType },
 };
 
@@ -145,8 +145,8 @@ const DEFAULT_BG_TYPE: BgType = THEME_DEFAULTS.light.type;
 /*  localStorage persistence                                           */
 /* ------------------------------------------------------------------ */
 
-const STORAGE_KEY_LIGHT = "bluweo-background-light";
-const STORAGE_KEY_DARK = "bluweo-background-dark";
+const STORAGE_KEY_LIGHT = "bluweo-background-light-v2";
+const STORAGE_KEY_DARK = "bluweo-background-dark-v2";
 
 interface StoredBackground {
   id: string;
