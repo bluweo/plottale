@@ -3,9 +3,12 @@
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useRef, useEffect } from "react";
-import { Star1, ArrowLeft2, ArrowRight2, PlayCircle, Play, Clock, Book1 } from "iconsax-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { Star1, ArrowLeft2, ArrowRight2, PlayCircle, Play, Pause, Clock, Book1, BookSaved, Lock1, Coin1, VolumeHigh, VolumeMute, Maximize4, Add, Repeat } from "iconsax-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAppearance } from "@/context/AppearanceContext";
+import { useBackground } from "@/context/BackgroundContext";
 import { useLocalizedHref } from "@/hooks/useLocalizedHref";
 import {
   type PlottaleNovel,
@@ -198,7 +201,8 @@ function PhotoGalleryLightbox({
             alt=""
             width={1200}
             height={800}
-            className="max-h-[calc(100vh-160px)] w-auto object-contain rounded-lg"
+            className="max-h-[calc(100vh-160px)] w-auto object-contain"
+            style={{ borderRadius: "var(--glass-radius)" }}
             sizes="100vw"
             priority
           />
@@ -228,20 +232,300 @@ function PhotoGalleryLightbox({
             <button
               key={i}
               onClick={() => setCurrentIndex(i)}
-              className="flex-shrink-0 relative rounded-lg cursor-pointer transition-all duration-200"
+              className="flex-shrink-0 relative cursor-pointer transition-all duration-200"
               style={{
                 width: 72,
                 height: 48,
+                borderRadius: "var(--glass-radius-sm)",
                 opacity: i === currentIndex ? 1 : 0.4,
                 boxShadow: i === currentIndex ? "0 0 0 2px rgba(0,0,0,1), 0 0 0 4px rgba(255,255,255,0.85)" : "none",
+                overflow: "hidden",
               }}
             >
-              <Image src={img} alt="" fill className="object-cover rounded-lg" sizes="72px" />
+              <Image src={img} alt="" fill className="object-cover" sizes="72px" />
             </button>
           ))}
         </div>
       </div>
     </div>
+  );
+}
+
+/* ================================================================== */
+/*  TRAILER PLAYER — fullscreen cinematic video player                  */
+/* ================================================================== */
+
+function TrailerPlayer({
+  src,
+  title,
+  onClose,
+}: {
+  src: string;
+  title: string;
+  onClose: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLooping, setIsLooping] = useState(true);
+  const [buffered, setBuffered] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-hide controls after 3s
+  const resetControlsTimer = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    controlsTimerRef.current = setTimeout(() => {
+      if (isPlaying) setShowControls(false);
+    }, 3000);
+  }, [isPlaying]);
+
+  useEffect(() => {
+    resetControlsTimer();
+    return () => {
+      if (controlsTimerRef.current) clearTimeout(controlsTimerRef.current);
+    };
+  }, [resetControlsTimer]);
+
+  // Keyboard controls
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === " " || e.key === "k") {
+        e.preventDefault();
+        togglePlay();
+      }
+      if (e.key === "m") toggleMute();
+      if (e.key === "f") toggleFullscreen();
+      if (e.key === "l") setIsLooping((v) => !v);
+      if (e.key === "ArrowLeft") seekBy(-10);
+      if (e.key === "ArrowRight") seekBy(10);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
+  const togglePlay = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) { v.play(); setIsPlaying(true); }
+    else { v.pause(); setIsPlaying(false); }
+  };
+
+  const toggleMute = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setIsMuted(v.muted);
+  };
+
+  const seekBy = (seconds: number) => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + seconds));
+  };
+
+  const toggleFullscreen = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  };
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientX - rect.left) / rect.width;
+    const v = videoRef.current;
+    if (v && duration) v.currentTime = pct * duration;
+  };
+
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  return createPortal(
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      style={{ background: "rgba(0,0,0,0.92)" }}
+      onMouseMove={resetControlsTimer}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {/* Video container */}
+      <div className="relative w-full h-full flex items-center justify-center">
+        <video
+          ref={videoRef}
+          src={src}
+          autoPlay
+          playsInline
+          loop={isLooping}
+          className="max-w-full max-h-full object-contain"
+          style={{ borderRadius: "var(--glass-radius-sm)" }}
+          onTimeUpdate={(e) => {
+            const v = e.currentTarget;
+            setCurrentTime(v.currentTime);
+            if (v.buffered.length > 0) {
+              setBuffered((v.buffered.end(v.buffered.length - 1) / v.duration) * 100);
+            }
+          }}
+          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+          onEnded={() => setIsPlaying(false)}
+          onClick={togglePlay}
+        />
+
+        {/* Title bar — top */}
+        <div
+          className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 py-4 transition-opacity duration-300"
+          style={{
+            opacity: showControls ? 1 : 0,
+            pointerEvents: showControls ? "auto" : "none",
+            background: "linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%)",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <PlayCircle size={20} variant="Bulk" color="#f59e0b" />
+            <span className="text-white font-semibold text-sm">{title} — Trailer</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+          >
+            <Add size={22} variant="Linear" color="currentColor" className="rotate-45" />
+          </button>
+        </div>
+
+        {/* Center play/pause overlay on click */}
+        {!isPlaying && (
+          <button
+            onClick={togglePlay}
+            className="absolute inset-0 flex items-center justify-center cursor-pointer"
+          >
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center"
+              style={{
+                background: "rgba(255,255,255,0.15)",
+                backdropFilter: "blur(20px)",
+                border: "1px solid rgba(255,255,255,0.2)",
+              }}
+            >
+              <Play size={32} variant="Bold" color="white" />
+            </div>
+          </button>
+        )}
+
+        {/* Bottom controls bar */}
+        <div
+          className="absolute bottom-0 left-0 right-0 px-5 pb-5 pt-16 transition-opacity duration-300"
+          style={{
+            opacity: showControls ? 1 : 0,
+            pointerEvents: showControls ? "auto" : "none",
+            background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)",
+          }}
+        >
+          {/* Progress bar */}
+          <div
+            ref={progressRef}
+            className="group/progress relative w-full h-1.5 rounded-full cursor-pointer mb-4 hover:h-2.5 transition-all"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+            onClick={handleProgressClick}
+          >
+            {/* Buffered */}
+            <div
+              className="absolute inset-y-0 left-0 rounded-full"
+              style={{ width: `${buffered}%`, background: "rgba(255,255,255,0.2)" }}
+            />
+            {/* Played */}
+            <div
+              className="absolute inset-y-0 left-0 rounded-full"
+              style={{
+                width: `${progress}%`,
+                background: "linear-gradient(90deg, #f59e0b, #ea580c)",
+              }}
+            />
+            {/* Thumb */}
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full opacity-0 group-hover/progress:opacity-100 transition-opacity"
+              style={{
+                left: `${progress}%`,
+                transform: `translate(-50%, -50%)`,
+                background: "white",
+                boxShadow: "0 0 8px rgba(0,0,0,0.4)",
+              }}
+            />
+          </div>
+
+          {/* Controls row */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {/* Play/Pause */}
+              <button
+                onClick={togglePlay}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition-all cursor-pointer"
+              >
+                {isPlaying ? (
+                  <Pause size={22} variant="Bold" color="currentColor" />
+                ) : (
+                  <Play size={22} variant="Bold" color="currentColor" />
+                )}
+              </button>
+
+              {/* Volume */}
+              <button
+                onClick={toggleMute}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition-all cursor-pointer"
+              >
+                {isMuted ? (
+                  <VolumeMute size={20} variant="Bold" color="currentColor" />
+                ) : (
+                  <VolumeHigh size={20} variant="Bold" color="currentColor" />
+                )}
+              </button>
+
+              {/* Time */}
+              <span className="text-white/70 text-xs font-medium tabular-nums ml-1">
+                {formatTime(currentTime)} / {formatTime(duration)}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Loop */}
+              <button
+                onClick={() => setIsLooping((v) => !v)}
+                className="w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer"
+                style={{
+                  color: isLooping ? "#f59e0b" : "rgba(255,255,255,0.7)",
+                  background: isLooping ? "rgba(245,158,11,0.15)" : "transparent",
+                }}
+                title={isLooping ? "Loop: On" : "Loop: Off"}
+              >
+                <Repeat size={20} variant="Bold" color="currentColor" />
+              </button>
+              {/* Fullscreen */}
+              <button
+                onClick={toggleFullscreen}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-white hover:bg-white/10 transition-all cursor-pointer"
+              >
+                <Maximize4 size={20} variant="Linear" color="currentColor" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -256,7 +540,9 @@ function CastStrip({
   characters: PlottaleCharacter[];
   lang: string;
 }) {
+  const { isDarkBg } = useBackground();
   if (characters.length === 0) return null;
+  const descColor = isDarkBg ? "text-white/60" : "text-neutral-600 dark:text-white/60";
   return (
     <section className="py-4 px-4 md:px-8 lg:px-12">
       <div
@@ -265,17 +551,14 @@ function CastStrip({
         {characters.map((char) => (
           <div key={char.id} className="flex-shrink-0 w-[110px] lg:w-[120px] transition-transform duration-300 hover:scale-110 cursor-pointer">
             {/* Card with photo fills entire card */}
-            <div className="relative aspect-[3/4] rounded-xl overflow-hidden bg-neutral-200 dark:bg-neutral-800 group">
+            <div className="relative aspect-[3/4] overflow-hidden bg-neutral-200 dark:bg-neutral-800 group" style={{ borderRadius: "var(--glass-radius)" }}>
               <Image src={char.avatar} alt={localize(char.name, lang)} fill className="object-cover" sizes="120px" />
               {/* Gradient overlay for text readability */}
               <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/70 to-transparent" />
-              {/* Name + Role on bottom-left */}
+              {/* Name on bottom-left */}
               <div className="absolute bottom-2 left-2 right-9">
                 <p className="text-[11px] font-semibold text-white truncate leading-tight">
                   {localize(char.name, lang)}
-                </p>
-                <p className="text-[9px] text-white/60 truncate leading-tight mt-0.5">
-                  {localize(char.role, lang)}
                 </p>
               </div>
               {/* [+] follow button on bottom-right */}
@@ -283,10 +566,146 @@ function CastStrip({
                 +
               </button>
             </div>
+            {/* Role description — outside the card */}
+            <p className={`text-[10px] leading-snug mt-1.5 text-center ${descColor}`}>
+              {localize(char.role, lang)}
+            </p>
           </div>
         ))}
       </div>
     </section>
+  );
+}
+
+/* ================================================================== */
+/*  HERO COVER CAROUSEL — rotating book cover images                    */
+/* ================================================================== */
+
+function HeroCoverCarousel({
+  images,
+  title,
+  onImageClick,
+}: {
+  images: string[];
+  title: string;
+  onImageClick?: () => void;
+}) {
+  const { t } = useLanguage();
+  const [current, setCurrent] = useState(0);
+  const totalSlides = images.length;
+
+  /* Auto-rotate: 6s interval */
+  useEffect(() => {
+    if (totalSlides <= 1) return;
+    const timer = setInterval(() => {
+      setCurrent((prev) => (prev + 1) % totalSlides);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, [totalSlides]);
+
+  const goTo = useCallback(
+    (idx: number) => {
+      if (idx >= 0 && idx < totalSlides) setCurrent(idx);
+    },
+    [totalSlides]
+  );
+
+  const handlePrev = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      goTo(current > 0 ? current - 1 : totalSlides - 1);
+    },
+    [current, totalSlides, goTo]
+  );
+
+  const handleNext = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      goTo(current < totalSlides - 1 ? current + 1 : 0);
+    },
+    [current, totalSlides, goTo]
+  );
+
+  return (
+    <div className="relative w-full aspect-[9/16] overflow-hidden group/carousel" style={{ borderRadius: "var(--glass-radius-lg)" }}>
+      {/* Slides */}
+      <div
+        className="flex h-full transition-transform duration-1000 ease-in-out"
+        style={{ transform: `translateX(-${current * 100}%)` }}
+      >
+        {images.map((img, idx) => (
+          <div key={idx} className="relative w-full h-full flex-shrink-0">
+            {img ? (
+              <Image
+                src={img}
+                alt={`${title} — image ${idx + 1}`}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 55vw, 30vw"
+                priority={idx === 0}
+              />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
+                <BookSaved size={36} variant="Bulk" color="currentColor" className="opacity-25" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Click overlay */}
+      {onImageClick && (
+        <button
+          onClick={onImageClick}
+          className="absolute inset-0 z-5 cursor-pointer"
+          aria-label="Open gallery"
+        />
+      )}
+
+      {/* Dot indicators */}
+      {totalSlides > 1 && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+          {images.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                goTo(idx);
+              }}
+              className="cursor-pointer transition-all duration-300"
+              style={{
+                width: idx === current ? 18 : 6,
+                height: 6,
+                borderRadius: 3,
+                background: idx === current ? "white" : "rgba(255,255,255,0.45)",
+                boxShadow: idx === current ? "0 1px 4px rgba(0,0,0,0.3)" : "none",
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Nav arrows — visible on hover */}
+      {totalSlides > 1 && (
+        <>
+          <button
+            onClick={handlePrev}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/35 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 hover:bg-black/55 transition-all duration-200 cursor-pointer z-10 [&_svg]:w-[14px] [&_svg]:h-[14px]"
+          >
+            <ArrowLeft2 size={14} variant="Linear" color="white" />
+          </button>
+          <button
+            onClick={handleNext}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/35 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 hover:bg-black/55 transition-all duration-200 cursor-pointer z-10 [&_svg]:w-[14px] [&_svg]:h-[14px]"
+          >
+            <ArrowRight2 size={14} variant="Linear" color="white" />
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -308,11 +727,16 @@ function CinematicHero({
   nextNovel: PlottaleNovel | null;
 }) {
   const { t, lang } = useLanguage();
+  const { theme, transparency } = useAppearance();
+  const isDark = theme === "dark";
   const lhref = useLocalizedHref();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [showTrailer, setShowTrailer] = useState(false);
 
   // Gallery images: exclude cover (shown separately in hero)
   const galleryImages = novel.images.filter((img) => img !== novel.coverImage);
+  // All images for carousel: cover first, then gallery scenes
+  const coverImages = [novel.coverImage, ...novel.images.filter((img) => img !== novel.coverImage)];
   // All images: cover first, then gallery (for lightbox navigation)
   const allImages = [novel.coverImage, ...galleryImages];
 
@@ -329,36 +753,48 @@ function CinematicHero({
             priority
             sizes="100vw"
           />
-          {/* Dark gradient overlays */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-black/20" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/30 to-black/40" />
+          {/* Gradient overlay — 30% to 60% black, same for both themes */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: "linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 100%)",
+            }}
+          />
         </div>
 
-        {/* Two-column content area */}
-        <div className="relative z-10 w-full pb-10 md:pb-14 pt-40 max-[1024px]:pt-44">
-          <div className="max-w-6xl mx-auto px-4 md:px-8 lg:px-12">
-          <div className="flex flex-col lg:flex-row gap-8 lg:gap-10 lg:items-end">
-            {/* Cover image — shown first on mobile, moves to right on desktop */}
-            <div className="w-[55%] mx-auto lg:hidden">
-              <button
-                onClick={() => setLightboxIndex(0)}
-                className="relative block w-full aspect-[9/16] rounded-2xl overflow-hidden cursor-pointer group shadow-[0_8px_40px_rgba(0,0,0,0.5)]"
-              >
-                <Image
-                  src={novel.coverImage}
-                  alt={localize(novel.title, lang)}
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  sizes="50vw"
-                  priority
-                />
-              </button>
-            </div>
+        {/* Thin separator line below nav */}
+        <div className="absolute top-[90px] left-0 right-0 z-20 h-px bg-white/25" />
+        {/* Vertical separator — left of content panel */}
+        <div className="hidden lg:block absolute z-20 w-px bg-white/25" style={{ top: 90, bottom: 0, right: "calc(2.5rem + (100% - 9.5rem) * 0.56)" }} />
+        {/* Vertical separator — right of content panel */}
+        <div className="hidden lg:block absolute z-20 w-px bg-white/25" style={{ top: 90, bottom: 0, right: "calc(2.5rem + (100% - 9.5rem) * 0.18)" }} />
 
-            {/* Left column — Novel info */}
-            <div className="flex-1 min-w-0">
+        {/* Fluid 3-column content area */}
+        <div className="relative z-10 w-full pb-10 md:pb-14 pt-40 max-[1024px]:pt-44 px-4 md:px-8 lg:pl-24 lg:pr-8 xl:pl-28 xl:pr-10">
+
+          {/* Mobile: cover first, then stacked content */}
+          <div className="lg:hidden mb-8">
+            <div className="w-[55%] mx-auto">
+              <div className="overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)]" style={{ borderRadius: "var(--glass-radius-lg)" }}>
+                <HeroCoverCarousel
+                  images={coverImages}
+                  title={localize(novel.title, lang)}
+                  onImageClick={() => setLightboxIndex(0)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop: 3-column layout | Mobile: stacked */}
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-0 lg:items-end">
+
+            {/* ── MAIN (Left) — Spacer to push content right ── */}
+            <div className="flex-1 min-w-0 hidden lg:block" />
+
+            {/* ── SECOND RIGHT (~40%) — All content ── */}
+            <div className="lg:w-[40%] xl:w-[38%] flex-shrink-0 lg:px-10 lg:self-end">
               {/* Badges */}
-              <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 {novel.contentRating && (
                   <span className="px-2 py-0.5 text-xs font-bold border border-white/40 text-white/90 rounded">
                     {novel.contentRating}
@@ -367,20 +803,20 @@ function CinematicHero({
                 {novel.genres.map((g, i) => (
                   <span
                     key={i}
-                    className="px-3 py-1 text-xs font-medium rounded-full bg-white/10 backdrop-blur-sm text-white/80 border border-white/10"
+                    className="px-3 py-1 text-xs font-medium rounded-full backdrop-blur-sm bg-white/10 text-white/80 border border-white/10"
                   >
                     {localize(g, lang)}
                   </span>
                 ))}
               </div>
 
-              {/* Title */}
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-4 max-w-2xl">
+              {/* 1. Title */}
+              <h1 className="text-4xl md:text-5xl lg:text-5xl font-bold text-white leading-tight mb-4">
                 {localize(novel.title, lang)}
               </h1>
 
-              {/* 1. Author profile */}
-              <div className="flex items-center gap-3 mb-5">
+              {/* 2. Author */}
+              <div className="flex items-center gap-3 mb-4">
                 <Image
                   src={novel.authorAvatar}
                   alt=""
@@ -393,112 +829,76 @@ function CinematicHero({
                 </span>
               </div>
 
-              {/* 2–3. Synopsis + more synopsis */}
-              <div className="mb-6 space-y-3" style={{ maxWidth: "576px" }}>
-                <p className="text-white/70 text-base md:text-lg leading-relaxed">
-                  {localize(novel.synopsis, lang)}
-                </p>
-                <p className="text-white/50 text-sm md:text-base leading-relaxed">
-                  {lang === "th"
-                    ? "เรื่องราวที่สะเทือนใจจากนวนิยายชื่อดังของเอลซา จูเบิร์ต เล่าชีวิตจริงของหญิงชาวโคซาผู้ผ่านพ้นยุคการแบ่งแยกสีผิว ความรัก ความสูญเสีย และความหวังที่ไม่มีวันดับ"
-                    : "Based on the celebrated novel by Elsa Joubert, this is the true-to-life story of a Xhosa woman navigating the apartheid era — a tale of love, loss, and an unyielding hope that refuses to be silenced."}
-                </p>
+              {/* 3. 1st paragraph — novel preview */}
+              <p className="text-white/70 text-base leading-relaxed mb-3">
+                {localize(novel.synopsis, lang)}
+              </p>
+
+              {/* 4. 2nd paragraph — extended synopsis */}
+              <p className="text-white/50 text-base leading-relaxed mb-4">
+                {lang === "th"
+                  ? "เรื่องราวที่สะเทือนใจจากนวนิยายชื่อดังของเอลซา จูเบิร์ต เล่าชีวิตจริงของหญิงชาวโคซาผู้ผ่านพ้นยุคการแบ่งแยกสีผิว ความรัก ความสูญเสีย และความหวังที่ไม่มีวันดับ"
+                  : "Based on the celebrated novel by Elsa Joubert, this is the true-to-life story of a Xhosa woman navigating the apartheid era — a tale of love, loss, and an unyielding hope that refuses to be silenced."}
+              </p>
+
+              {/* 5. Rating */}
+              <div className="flex items-center gap-2 mb-5">
+                <Stars rating={novel.rating} size={16} />
               </div>
 
-              {/* 4. Review / Rating */}
-              <div className="flex items-center gap-2 mb-8">
-                <Stars rating={novel.rating} size={18} />
-              </div>
-
-              {/* 5. CTAs */}
-              <div className="flex flex-wrap items-center gap-3">
+              {/* 6. CTAs — Read + Trailer on same line */}
+              <div className="flex gap-2.5">
                 <Link
                   href={lhref(`/novel/${novel.slug}/chapter-1`)}
-                  className="flex items-center gap-2 px-7 py-3 rounded-full text-white font-semibold text-sm cursor-pointer transition-all hover:brightness-110 hover:scale-105"
+                  className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-full text-white font-semibold text-sm cursor-pointer transition-all hover:brightness-110 hover:scale-[1.02]"
                   style={{ background: "linear-gradient(135deg, #f59e0b, #ea580c)" }}
                 >
-                  <Book1 size={20} variant="Bold" color="#ffffff" />
+                  <Book1 size={18} variant="Bold" color="#ffffff" />
                   {t("pt.novel.readch1")}
                 </Link>
                 {novel.trailerThumbnail && (
                   <button
-                    className="flex items-center gap-2 px-7 py-3 rounded-full text-white font-semibold text-sm cursor-pointer transition-all hover:bg-white/20 hover:scale-105"
+                    onClick={() => setShowTrailer(true)}
+                    className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-semibold text-sm cursor-pointer transition-all hover:scale-[1.02] text-white hover:bg-white/20"
                     style={{
                       background: "rgba(255,255,255,0.1)",
                       backdropFilter: "blur(12px)",
                       border: "1px solid rgba(255,255,255,0.2)",
                     }}
                   >
-                    <PlayCircle size={20} variant="Bulk" color="#ffffff" />
+                    <PlayCircle size={18} variant="Bulk" color="#ffffff" />
                     {t("pt.novel.trailer")}
                   </button>
                 )}
-                <Link
-                  href={lhref("/")}
-                  className="ml-auto flex items-center gap-2 px-5 py-3 rounded-full text-white font-semibold text-sm cursor-pointer transition-all hover:bg-white/20 hover:scale-105"
-                  style={{
-                    background: "rgba(255,255,255,0.1)",
-                    backdropFilter: "blur(12px)",
-                    border: "1px solid rgba(255,255,255,0.2)",
-                  }}
-                >
-                  <ArrowLeft2 size={18} variant="Linear" color="#ffffff" />
-                  {t("pt.novel.back") ?? "Back"}
-                </Link>
               </div>
             </div>
 
-            {/* Right column — Cover image (desktop only) */}
-            <div className="hidden lg:block lg:w-[30%] xl:w-[32%] flex-shrink-0">
-              <button
-                onClick={() => setLightboxIndex(0)}
-                className="relative block w-full aspect-[9/16] rounded-2xl overflow-hidden cursor-pointer group shadow-[0_8px_40px_rgba(0,0,0,0.5)]"
-              >
-                <Image
-                  src={novel.coverImage}
-                  alt={localize(novel.title, lang)}
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  sizes="50vw"
-                  priority
+            {/* ── RIGHT PANEL — Book cover + Back ── */}
+            <div className="hidden lg:flex flex-col items-center gap-4 lg:w-[18%] xl:w-[18%] flex-shrink-0 lg:pl-10 lg:self-end">
+              {/* Book cover */}
+              <div className="w-full overflow-hidden shadow-[0_8px_40px_rgba(0,0,0,0.5)]" style={{ borderRadius: "var(--glass-radius-lg)" }}>
+                <HeroCoverCarousel
+                  images={coverImages}
+                  title={localize(novel.title, lang)}
+                  onImageClick={() => setLightboxIndex(0)}
                 />
-              </button>
+              </div>
+              {/* Back button */}
+              <Link
+                href={lhref("/")}
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-full font-semibold text-sm cursor-pointer transition-all hover:scale-[1.02] text-white hover:bg-white/20 self-end"
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  backdropFilter: "blur(12px)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                }}
+              >
+                <ArrowLeft2 size={16} variant="Linear" color="#ffffff" />
+                {t("pt.novel.back") ?? "Back"}
+              </Link>
             </div>
-          </div>
           </div>
         </div>
-
-        {/* Prev / Next novel arrows — desktop only, appear on gutter hover */}
-        <style>{`
-          .novel-nav-zone .novel-nav-btn { opacity: 0; transform: translateY(-50%) scale(0.8); }
-          .novel-nav-zone:hover .novel-nav-btn { opacity: 1; transform: translateY(-50%) scale(1); }
-        `}</style>
-        {prevNovel && (
-          <div className="hidden lg:block absolute left-0 top-0 bottom-0 z-20" style={{ width: "calc((100% - 1152px) / 2 + 48px)" }}>
-            <Link
-              href={lhref(`/novel/${prevNovel.slug}`)}
-              className="novel-nav-zone block absolute inset-0 cursor-pointer"
-              title={localize(prevNovel.title, lang)}
-            >
-              <div className="novel-nav-btn page-nav-arrow absolute top-1/2 right-8 transition-all duration-300">
-                <ArrowLeft2 size={20} variant="Linear" color="currentColor" />
-              </div>
-            </Link>
-          </div>
-        )}
-        {nextNovel && (
-          <div className="hidden lg:block absolute right-0 top-0 bottom-0 z-20" style={{ width: "calc((100% - 1152px) / 2 + 48px)" }}>
-            <Link
-              href={lhref(`/novel/${nextNovel.slug}`)}
-              className="novel-nav-zone block absolute inset-0 cursor-pointer"
-              title={localize(nextNovel.title, lang)}
-            >
-              <div className="novel-nav-btn page-nav-arrow absolute top-1/2 left-8 transition-all duration-300">
-                <ArrowRight2 size={20} variant="Linear" color="currentColor" />
-              </div>
-            </Link>
-          </div>
-        )}
       </section>
 
       {/* Image carousel section — fluid */}
@@ -518,6 +918,15 @@ function CinematicHero({
           images={allImages}
           initialIndex={lightboxIndex}
           onClose={() => setLightboxIndex(null)}
+        />
+      )}
+
+      {/* Trailer player */}
+      {showTrailer && (
+        <TrailerPlayer
+          src="/video-backgrounds/dark/space-war.mp4"
+          title={localize(novel.title, lang)}
+          onClose={() => setShowTrailer(false)}
         />
       )}
     </>
@@ -586,7 +995,7 @@ function BentoGridSection({
           </h3>
           <div className="grid grid-cols-3 gap-2 h-36">
             {galleryImages.map((img, i) => (
-              <div key={i} className="relative rounded-lg overflow-hidden">
+              <div key={i} className="relative overflow-hidden" style={{ borderRadius: "var(--glass-radius-sm)" }}>
                 <Image src={img} alt="" fill className="object-cover" sizes="200px" />
               </div>
             ))}
@@ -605,7 +1014,7 @@ function BentoGridSection({
             <h3 className="text-sm font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 mb-4">
               {t("pt.novel.trailer")}
             </h3>
-            <div className="relative h-40 rounded-lg overflow-hidden group cursor-pointer">
+            <div className="relative h-40 overflow-hidden group cursor-pointer" style={{ borderRadius: "var(--glass-radius-sm)" }}>
               <Image
                 src={novel.trailerThumbnail}
                 alt=""
@@ -666,9 +1075,73 @@ function BentoGridSection({
 /*  SECTION 3 — CHAPTERS                                               */
 /* ================================================================== */
 
+function CreditModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      {/* Modal */}
+      <div
+        className="relative p-8 text-center"
+        style={{
+          width: "100%",
+          maxWidth: 400,
+          borderRadius: "var(--glass-radius-lg)",
+          background: "var(--glass-bg)",
+          backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+          WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+          border: "1px solid var(--glass-border)",
+          boxShadow: "0 25px 60px rgba(0,0,0,0.4)",
+          animation: "cardEnter 0.35s var(--ease-spring) both",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Icon */}
+        <div className="w-16 h-16 rounded-full bg-neutral-200 dark:bg-white/10 flex items-center justify-center mx-auto mb-5">
+          <span className="text-neutral-700 dark:text-white/80 [&_svg]:!text-current">
+            <Coin1 size={32} variant="Bulk" color="currentColor" />
+          </span>
+        </div>
+        <h3 className="text-xl font-bold text-neutral-800 dark:text-white mb-2">
+          Premium Chapter
+        </h3>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed mb-6">
+          This chapter requires <span className="font-semibold text-amber-500">1 credit</span> to unlock. Support the author and continue reading this story.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 px-4 text-sm font-semibold text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-white/10 hover:bg-neutral-200 dark:hover:bg-white/15 transition-colors cursor-pointer"
+            style={{ borderRadius: "var(--glass-radius-pill)" }}
+          >
+            Maybe Later
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 px-4 text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 transition-colors cursor-pointer flex items-center justify-center gap-2"
+            style={{ borderRadius: "var(--glass-radius-pill)" }}
+          >
+            <Coin1 size={16} variant="Bold" color="white" />
+            Unlock (1 Credit)
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function ChaptersSection({ chapters, novelSlug }: { chapters: PlottaleChapter[]; novelSlug: string }) {
   const { t, lang } = useLanguage();
   const lhref = useLocalizedHref();
+  const [creditModalOpen, setCreditModalOpen] = useState(false);
+
+  // Saklı: chapters 3 & 4 are locked (premium)
+  const isLocked = (ch: PlottaleChapter) => novelSlug === "sakli" && ch.number >= 3;
 
   if (chapters.length === 0) return null;
 
@@ -681,45 +1154,90 @@ function ChaptersSection({ chapters, novelSlug }: { chapters: PlottaleChapter[];
             {t("pt.novel.chapters")}
           </h2>
 
+          <style>{`.ch-item:hover > .ch-border { opacity: 0; } .ch-item:hover + .ch-item > .ch-border { opacity: 0; }`}</style>
           <div className="space-y-0">
-            {chapters.map((ch, i) => (
-              <div
-                key={ch.id}
-                style={{ animation: `cardEnter 0.5s var(--ease-spring) ${i * 0.06}s both` }}
-              >
-                {i > 0 && (
-                  <div className="border-t border-neutral-200/60 dark:border-white/10" />
-                )}
-                <Link
-                  href={lhref(`/novel/${novelSlug}/chapter-${ch.number}`)}
-                  className="group flex gap-5 md:gap-8 py-5 px-2 rounded-xl hover:bg-neutral-100/50 dark:hover:bg-white/5 transition-colors"
-                >
+            {chapters.map((ch, i) => {
+              const locked = isLocked(ch);
+              const inner = (
+                <>
                   {/* Number */}
-                  <span className="text-3xl md:text-4xl font-extrabold text-neutral-800 dark:text-white/80 w-12 flex-shrink-0 pt-1 tabular-nums">
+                  <span className={`text-3xl md:text-4xl font-extrabold w-12 flex-shrink-0 pt-1 tabular-nums ${locked ? "text-neutral-400 dark:text-white/40" : "text-neutral-800 dark:text-white/80"}`}>
                     {String(ch.number).padStart(2, "0")}.
                   </span>
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base md:text-lg font-semibold text-neutral-800 dark:text-white mb-1 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+                    <h3
+                      className={`text-base md:text-lg font-semibold mb-1 transition-colors ${locked ? "text-neutral-400 dark:text-white/40 select-none" : "text-neutral-800 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400"}`}
+                      style={locked ? { filter: "blur(5px)", WebkitFilter: "blur(5px)" } : undefined}
+                    >
                       {localize(ch.title, lang)}
                     </h3>
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed line-clamp-2">
+                    <p
+                      className={`text-sm leading-relaxed line-clamp-2 ${locked ? "text-neutral-400/70 dark:text-neutral-500/70 select-none" : "text-neutral-500 dark:text-neutral-400"}`}
+                      style={locked ? { filter: "blur(4px)", WebkitFilter: "blur(4px)" } : undefined}
+                    >
                       {localize(ch.description, lang)}
                     </p>
                   </div>
 
-                  {/* Reading time */}
-                  <div className="flex items-center gap-1.5 text-xs text-neutral-400 dark:text-neutral-500 flex-shrink-0 self-center">
-                    <Clock size={14} />
-                    <span>{ch.readingTime} {t("pt.novel.readtime")}</span>
-                  </div>
-                </Link>
-              </div>
-            ))}
+                  {/* Lock icon or reading time */}
+                  {locked ? (
+                    <div
+                      className="flex-shrink-0 self-center flex items-center justify-center rounded-full"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        background: "var(--glass-bg)",
+                        backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+                        WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+                        border: "1px solid var(--glass-border)",
+                      }}
+                    >
+                      <span className="text-neutral-700 dark:text-white/80 flex items-center justify-center [&_svg]:!text-current"><Lock1 size={16} variant="Bold" color="currentColor" /></span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-400 dark:text-neutral-500 flex-shrink-0 self-center">
+                      <Clock size={14} />
+                      <span>{ch.readingTime} {t("pt.novel.readtime")}</span>
+                    </div>
+                  )}
+                </>
+              );
+
+              return (
+                <div
+                  key={ch.id}
+                  className="ch-item"
+                  style={{ animation: `cardEnter 0.5s var(--ease-spring) ${i * 0.06}s both` }}
+                >
+                  {i > 0 && (
+                    <div className="ch-border border-t border-neutral-200/60 dark:border-white/10 transition-opacity duration-200 mx-4" />
+                  )}
+                  {locked ? (
+                    <button
+                      onClick={() => setCreditModalOpen(true)}
+                      className="group flex gap-5 md:gap-8 py-5 px-4 hover:bg-neutral-100/50 dark:hover:bg-white/5 transition-colors w-full text-left cursor-pointer"
+                      style={{ borderRadius: "var(--glass-radius)" }}
+                    >
+                      {inner}
+                    </button>
+                  ) : (
+                    <Link
+                      href={lhref(`/novel/${novelSlug}/chapter-${ch.number}`)}
+                      className="group flex gap-5 md:gap-8 py-5 px-4 hover:bg-neutral-100/50 dark:hover:bg-white/5 transition-colors"
+                      style={{ borderRadius: "var(--glass-radius)" }}
+                    >
+                      {inner}
+                    </Link>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
+      <CreditModal open={creditModalOpen} onClose={() => setCreditModalOpen(false)} />
     </section>
   );
 }
@@ -731,6 +1249,7 @@ function ChaptersSection({ chapters, novelSlug }: { chapters: PlottaleChapter[];
 function RelatedNovelsSection({ novel }: { novel: PlottaleNovel }) {
   const { t, lang } = useLanguage();
   const lhref = useLocalizedHref();
+  const { isDarkBg } = useBackground();
 
   const allNovels = getAllNovels();
   const novelGenreKeys = novel.genres.map((g) => g.en);
@@ -742,10 +1261,14 @@ function RelatedNovelsSection({ novel }: { novel: PlottaleNovel }) {
 
   if (related.length === 0) return null;
 
+  const headingColor = isDarkBg ? "text-white" : "text-neutral-800 dark:text-white";
+  const titleColor = isDarkBg ? "text-white group-hover:text-amber-400" : "text-neutral-800 dark:text-white group-hover:text-amber-600 dark:group-hover:text-amber-400";
+  const subtitleColor = isDarkBg ? "text-white/60" : "text-neutral-500 dark:text-neutral-400";
+
   return (
     <section className="px-4 md:px-8 lg:px-12 py-10 pb-20">
       <div className="max-w-6xl mx-auto">
-      <h2 className="text-2xl md:text-3xl font-bold text-neutral-800 dark:text-white mb-8">
+      <h2 className={`text-2xl md:text-3xl font-bold mb-8 ${headingColor}`}>
         {t("pt.novel.related")}
       </h2>
 
@@ -773,10 +1296,10 @@ function RelatedNovelsSection({ novel }: { novel: PlottaleNovel }) {
                 sizes="176px"
               />
             </div>
-            <h3 className="text-sm font-semibold text-neutral-800 dark:text-white truncate group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">
+            <h3 className={`text-sm font-semibold truncate transition-colors ${titleColor}`}>
               {localize(n.title, lang)}
             </h3>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+            <p className={`text-xs truncate ${subtitleColor}`}>
               {localize(n.author, lang)}
             </p>
           </Link>

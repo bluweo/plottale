@@ -25,6 +25,7 @@ import {
   User,
   Global,
   ArrowDown2,
+  HambergerMenu,
 } from "iconsax-react";
 import { useAppearance } from "@/context/AppearanceContext";
 import { useBackground } from "@/context/BackgroundContext";
@@ -206,12 +207,18 @@ function GelCircleWithComponentMenu({
   active,
   subMenu,
   isDark,
+  insideOverlay,
+  overlayOpen,
+  onOverlayToggle,
 }: {
   icon: IconComponent;
   label: string;
   active: boolean;
   subMenu: SubMenuItem[];
   isDark: boolean;
+  insideOverlay?: boolean;
+  overlayOpen?: boolean;
+  onOverlayToggle?: () => void;
 }) {
   const { t } = useLanguage();
   const lhref = useLocalizedHref();
@@ -220,9 +227,12 @@ function GelCircleWithComponentMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  /* Click-outside handler for mobile */
+  // When inside overlay, use controlled state from parent
+  const isOpen = insideOverlay ? !!overlayOpen : hovered;
+
+  /* Click-outside handler for mobile (not needed when inside overlay) */
   useEffect(() => {
-    if (!mobile || !hovered) return;
+    if (insideOverlay || !mobile || !hovered) return;
     function handleClick(e: MouseEvent) {
       const target = e.target as Node;
       if (
@@ -234,7 +244,7 @@ function GelCircleWithComponentMenu({
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [mobile, hovered]);
+  }, [mobile, hovered, insideOverlay]);
 
   /* ── Horizontal grid panel ── */
   const panelJSX = (
@@ -242,32 +252,34 @@ function GelCircleWithComponentMenu({
       ref={panelRef}
       className={[
         "glass-panel",
-        mobile
-          ? "fixed left-3 right-3 z-50 p-5 overflow-hidden"
-          : "absolute left-[calc(100%+12px)] top-0 p-5 overflow-hidden",
+        insideOverlay
+          ? "fixed left-4 right-4 z-[100] px-4 py-5 overflow-hidden"
+          : mobile
+            ? "fixed left-3 right-3 z-50 p-5 overflow-hidden"
+            : "absolute left-[calc(100%+12px)] top-0 p-5 overflow-hidden",
       ].join(" ")}
       style={{
-        ...(mobile ? { bottom: 100 } : {}),
-        opacity: hovered ? 1 : 0,
-        transform: hovered
+        ...(insideOverlay ? { bottom: 120 } : mobile ? { bottom: 100 } : {}),
+        opacity: isOpen ? 1 : 0,
+        transform: isOpen
           ? (mobile ? "none" : "translateX(0)")
           : (mobile ? "translateY(8px)" : "translateX(-8px)"),
-        pointerEvents: hovered ? "auto" : "none",
+        pointerEvents: isOpen ? "auto" : "none",
         transition: "opacity 300ms ease, transform 300ms var(--transition-apple)",
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex gap-5 justify-center">
+      <div className={insideOverlay ? "flex justify-evenly" : "flex gap-5 justify-center"}>
         {subMenu.map((item) => {
           const ItemIcon = item.icon;
           return (
             <Link
               key={item.href}
               href={lhref(item.href)}
-              className="flex flex-col items-center gap-2.5 group/item"
+              className={`flex flex-col items-center gap-2.5 group/item ${insideOverlay ? "flex-1" : ""}`}
             >
               <div
-                className="w-[60px] h-[60px] rounded-[16px] flex items-center justify-center [&_svg]:w-[28px] [&_svg]:h-[28px] transition-all duration-300 ease-out group-hover/item:scale-[1.18] group-hover/item:shadow-lg"
+                className={`${insideOverlay ? "w-[56px] h-[56px] rounded-[14px] mx-auto" : "w-[60px] h-[60px] rounded-[16px]"} flex items-center justify-center [&_svg]:w-[28px] [&_svg]:h-[28px] transition-all duration-300 ease-out group-hover/item:scale-[1.18] group-hover/item:shadow-lg`}
                 style={{
                   background: item.gradient || "rgba(255,255,255,0.5)",
                   color: item.iconColor || "currentColor",
@@ -291,7 +303,7 @@ function GelCircleWithComponentMenu({
       className="relative"
       onMouseEnter={() => !mobile && setHovered(true)}
       onMouseLeave={() => !mobile && setHovered(false)}
-      onClick={() => mobile && setHovered((v) => !v)}
+      onClick={() => mobile && (insideOverlay && onOverlayToggle ? onOverlayToggle() : setHovered((v) => !v))}
     >
       {/* ── Gel glass circle (stays circle, no expand) ── */}
       <div
@@ -312,11 +324,11 @@ function GelCircleWithComponentMenu({
       </div>
 
       {/* Invisible hover bridge — desktop only */}
-      {hovered && !mobile && (
+      {isOpen && !mobile && (
         <div className="absolute top-0 left-full w-[16px] h-14" />
       )}
 
-      {/* Panel: portal on mobile, inline on desktop */}
+      {/* Panel: portal when mobile (overlay or standalone), inline on desktop */}
       {mobile ? createPortal(panelJSX, document.body) : panelJSX}
     </div>
   );
@@ -326,7 +338,7 @@ function GelCircleWithComponentMenu({
 /*  Language Picker (globe gel button + Tesla-style panel)              */
 /* ------------------------------------------------------------------ */
 
-function LanguagePicker({ isDarkBg }: { isDarkBg: boolean }) {
+function LanguagePicker({ iconColor }: { iconColor?: string }) {
   const { lang, setLang } = useLanguage();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -362,17 +374,14 @@ function LanguagePicker({ isDarkBg }: { isDarkBg: boolean }) {
     return () => document.removeEventListener("keydown", handleKey);
   }, [open]);
 
-  const iconColor = isDarkBg ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.7)";
+  // iconColor is now passed as a prop
 
   return (
     <>
       <button
         ref={btnRef}
         onClick={() => setOpen((v) => !v)}
-        className="gel-glass relative flex items-center h-11 rounded-[9999px] !overflow-visible cursor-pointer"
-        style={{
-          transition: "box-shadow 400ms cubic-bezier(1,0,0.4,1), background-color 400ms cubic-bezier(1,0,0.4,1)",
-        }}
+        className="gel-glass relative flex items-center h-11 rounded-[9999px] !overflow-visible cursor-pointer nav-btn-hover"
         title="Change language"
       >
         <div className="gel-glass-shine rounded-[9999px]" />
@@ -492,7 +501,7 @@ function LanguagePicker({ isDarkBg }: { isDarkBg: boolean }) {
 /*  User Menu (Login / Avatar + Dropdown)                              */
 /* ------------------------------------------------------------------ */
 
-function UserMenu({ isDarkBg }: { isDarkBg: boolean }) {
+function UserMenu({ iconColor }: { iconColor?: string }) {
   const { t } = useLanguage();
   const [loggedIn, setLoggedIn] = useState(false);
   const [open, setOpen] = useState(false);
@@ -517,13 +526,10 @@ function UserMenu({ isDarkBg }: { isDarkBg: boolean }) {
         onClick={() => setLoggedIn(true)}
         className={[
           "gel-glass flex items-center h-11 rounded-[9999px] overflow-hidden",
-          "hover:!scale-100 hover:!translate-none",
+          "nav-btn-hover",
           "cursor-pointer",
         ].join(" ")}
-        style={{
-          color: isDarkBg ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.7)",
-          transition: "box-shadow 400ms cubic-bezier(1,0,0.4,1), background-color 400ms cubic-bezier(1,0,0.4,1)",
-        }}
+        style={{ color: iconColor }}
         title="Login"
       >
         <div className="gel-glass-shine rounded-[9999px]" />
@@ -544,13 +550,10 @@ function UserMenu({ isDarkBg }: { isDarkBg: boolean }) {
         onClick={() => setOpen((v) => !v)}
         className={[
           "gel-glass relative flex items-center justify-center w-11 h-11 rounded-[9999px] overflow-hidden",
-          "hover:!scale-100 hover:!translate-none",
+          "nav-btn-hover",
           "cursor-pointer",
           open ? "ring-1 ring-white/[0.25]" : "",
         ].join(" ")}
-        style={{
-          transition: "box-shadow 400ms cubic-bezier(1,0,0.4,1), background-color 400ms cubic-bezier(1,0,0.4,1)",
-        }}
         title="Account"
       >
         <div className="gel-glass-shine rounded-[9999px]" />
@@ -621,8 +624,8 @@ function UserMenu({ isDarkBg }: { isDarkBg: boolean }) {
             }}
           >
             <div className="flex justify-center mb-4">
-              <div className="w-12 h-12 rounded-full bg-red-500/10 dark:bg-red-500/15 flex items-center justify-center">
-                <span className="[&_svg]:w-[22px] [&_svg]:h-[22px] text-red-500">
+              <div className="w-12 h-12 rounded-full bg-neutral-200 dark:bg-white/10 flex items-center justify-center">
+                <span className="[&_svg]:w-[22px] [&_svg]:h-[22px] text-neutral-700 dark:text-white/80 [&_svg]:!text-current">
                   <Logout size={22} variant="Linear" color="currentColor" />
                 </span>
               </div>
@@ -636,13 +639,15 @@ function UserMenu({ isDarkBg }: { isDarkBg: boolean }) {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowSignOut(false)}
-                className="flex-1 h-10 rounded-[12px] bg-white/40 hover:bg-white/60 dark:bg-white/10 dark:hover:bg-white/15 text-[13px] font-[550] text-gray-700 dark:text-gray-300 cursor-pointer transition-colors duration-200"
+                className="flex-1 h-10 bg-white/40 hover:bg-white/60 dark:bg-white/10 dark:hover:bg-white/15 text-[13px] font-[550] text-gray-700 dark:text-gray-300 cursor-pointer transition-colors duration-200"
+                style={{ borderRadius: "var(--glass-radius-pill)" }}
               >
                 {t("user.cancel")}
               </button>
               <button
                 onClick={() => { setLoggedIn(false); setShowSignOut(false); }}
-                className="flex-1 h-10 rounded-[12px] bg-red-500 hover:bg-red-600 text-white text-[13px] font-[550] cursor-pointer transition-colors duration-200"
+                className="flex-1 h-10 bg-red-500 hover:bg-red-600 text-white text-[13px] font-[550] cursor-pointer transition-colors duration-200"
+                style={{ borderRadius: "var(--glass-radius-pill)" }}
               >
                 {t("user.signout")}
               </button>
@@ -668,11 +673,26 @@ export function PlottaleShell({
 }) {
   const pathname = usePathname();
   const barePath = stripLocale(pathname);
+  const { t } = useLanguage();
   const { theme, toggleTheme } = useAppearance();
   const isDark = theme === "dark";
-  const { isDarkBg } = useBackground();
+  const { isDarkBg, hydrated: bgHydrated } = useBackground();
   const lhref = useLocalizedHref();
   const controlsHidden = useScrollHidden();
+  const mobile = useIsMobile();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [activeOverlayMenu, setActiveOverlayMenu] = useState<string | null>(null);
+
+  /* Nav icon color — only apply after hydration to avoid SSR mismatch */
+  const navIconColor = bgHydrated
+    ? (isDarkBg ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.7)")
+    : undefined;
+
+  /* Close mobile menu on route change */
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setActiveOverlayMenu(null);
+  }, [pathname]);
 
   /* Shared transition style for hideable top controls */
   const hideStyle: React.CSSProperties = {
@@ -698,41 +718,109 @@ export function PlottaleShell({
         </Link>
         {/* Language picker (globe button) — hides on scroll down */}
         <div style={hideStyle}>
-          <LanguagePicker isDarkBg={isDarkBg} />
+          <LanguagePicker iconColor={navIconColor} />
         </div>
       </div>
 
-      {/* ── Top-right controls: theme toggle + user menu — hides on scroll down ── */}
+      {/* ── Top-right controls: theme toggle + user menu + hamburger (mobile) — hides on scroll down ── */}
       <div className="fixed top-6 right-6 z-50 flex items-center gap-2" style={hideStyle}>
-        <button
-          onClick={toggleTheme}
-          className="gel-glass relative flex items-center justify-center w-11 h-11 rounded-[9999px] !overflow-visible cursor-pointer [&_svg]:w-[20px] [&_svg]:h-[20px]"
-          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          <div className="gel-glass-shine rounded-[inherit]" />
-          <span style={{ color: isDarkBg ? "rgba(255, 255, 255, 0.85)" : "rgba(0, 0, 0, 0.7)" }}>
-            {theme === "dark" ? (
-              <Sun1 size={20} variant="Linear" color="currentColor" />
-            ) : (
-              <Moon size={20} variant="Linear" color="currentColor" />
-            )}
-          </span>
-        </button>
-        <UserMenu isDarkBg={isDarkBg} />
+        {!mobile && (
+          <button
+            onClick={toggleTheme}
+            className="gel-glass relative flex items-center justify-center w-11 h-11 rounded-[9999px] !overflow-visible cursor-pointer [&_svg]:w-[20px] [&_svg]:h-[20px] nav-btn-hover"
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            <div className="gel-glass-shine rounded-[inherit]" />
+            <span style={{ color: navIconColor }}>
+              {theme === "dark" ? (
+                <Sun1 size={20} variant="Linear" color="currentColor" />
+              ) : (
+                <Moon size={20} variant="Linear" color="currentColor" />
+              )}
+            </span>
+          </button>
+        )}
+        <UserMenu iconColor={navIconColor} />
+        {/* Hamburger button — mobile/tablet only */}
+        {mobile && (
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="gel-glass relative flex items-center justify-center w-11 h-11 rounded-[9999px] !overflow-visible cursor-pointer nav-btn-hover"
+            title="Menu"
+          >
+            <div className="gel-glass-shine rounded-[9999px]" />
+            <span
+              className="relative z-3 flex items-center justify-center [&_svg]:w-[20px] [&_svg]:h-[20px]"
+              style={{ color: navIconColor }}
+            >
+              <HambergerMenu size={20} variant="Linear" color="currentColor" />
+            </span>
+          </button>
+        )}
       </div>
 
-      {/* ── Floating glass panel nav ── */}
+      {/* ── Mobile menu overlay (backdrop + controls only) ── */}
+      {mobile && createPortal(
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-[99] bg-black/20 dark:bg-black/40 backdrop-blur-[var(--glass-blur-overlay)]"
+            style={{
+              opacity: mobileMenuOpen ? 1 : 0,
+              pointerEvents: mobileMenuOpen ? "auto" : "none",
+              transition: "opacity 200ms ease",
+            }}
+            onClick={() => { setMobileMenuOpen(false); setActiveOverlayMenu(null); }}
+          />
+
+          {/* Top-right controls: theme toggle + close button */}
+          <div
+            className="fixed top-6 right-6 z-[101] flex items-center gap-2"
+            style={{
+              opacity: mobileMenuOpen ? 1 : 0,
+              pointerEvents: mobileMenuOpen ? "auto" : "none",
+              transition: "opacity 200ms ease",
+            }}
+          >
+            <button
+              onClick={toggleTheme}
+              className="gel-glass relative flex items-center justify-center w-11 h-11 rounded-[9999px] !overflow-visible cursor-pointer [&_svg]:w-[20px] [&_svg]:h-[20px]"
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              <div className="gel-glass-shine rounded-[inherit]" />
+              <span style={{ color: "#ffffff" }}>
+                {theme === "dark" ? (
+                  <Sun1 size={20} variant="Linear" color="currentColor" />
+                ) : (
+                  <Moon size={20} variant="Linear" color="currentColor" />
+                )}
+              </span>
+            </button>
+            <button
+              onClick={() => { setMobileMenuOpen(false); setActiveOverlayMenu(null); }}
+              className="gel-glass relative flex items-center justify-center w-11 h-11 rounded-[9999px] !overflow-visible cursor-pointer"
+              title="Close menu"
+            >
+              <div className="gel-glass-shine rounded-[9999px]" />
+              <span
+                className="relative z-3 flex items-center justify-center [&_svg]:w-[20px] [&_svg]:h-[20px]"
+                style={{ color: "#ffffff" }}
+              >
+                <Add size={20} variant="Linear" color="currentColor" style={{ transform: "rotate(45deg)" }} />
+              </span>
+            </button>
+          </div>
+        </>,
+        document.body,
+      )}
+
+      {/* ── Single nav — repositions between desktop (left sidebar) and mobile (bottom overlay) ── */}
       <nav
         className={[
-          "fixed left-4 top-1/2 -translate-y-1/2 z-50",
-          "flex flex-col items-start gap-1.5 p-2",
-          "rounded-[9999px]",
-          "overflow-visible",
-          "max-[1024px]:left-1/2 max-[1024px]:-translate-x-1/2",
-          "max-[1024px]:top-auto max-[1024px]:bottom-6 max-[1024px]:translate-y-0",
-          "max-[1024px]:flex-row max-[1024px]:items-center max-[1024px]:gap-1",
-          "max-[1024px]:rounded-[9999px]",
-          "max-[1024px]:p-1.5",
+          "fixed z-[100] p-2 overflow-visible rounded-[9999px]",
+          mobile
+            ? "flex items-center gap-1.5"
+            : "flex flex-col items-start gap-1.5 left-4 top-1/2 -translate-y-1/2",
         ].join(" ")}
         style={{
           background: "var(--glass-bg)",
@@ -740,6 +828,18 @@ export function PlottaleShell({
           WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
           border: "1px solid var(--glass-border)",
           boxShadow: "var(--glass-shadow)",
+          ...(mobile
+            ? {
+                left: "50%",
+                bottom: 48,
+                opacity: mobileMenuOpen ? 1 : 0,
+                transform: mobileMenuOpen
+                  ? "translateX(-50%) translateY(0) scale(1)"
+                  : "translateX(-50%) translateY(16px) scale(0.95)",
+                pointerEvents: mobileMenuOpen ? "auto" : "none",
+                transition: "opacity 250ms ease, transform 250ms var(--transition-apple)",
+              }
+            : {}),
         }}
       >
         {NAV_ITEMS.map((item) => {
@@ -756,6 +856,13 @@ export function PlottaleShell({
                 active={isActive}
                 subMenu={item.subMenu}
                 isDark={isDark}
+                {...(mobile && mobileMenuOpen
+                  ? {
+                      insideOverlay: true,
+                      overlayOpen: activeOverlayMenu === item.href,
+                      onOverlayToggle: () => setActiveOverlayMenu(activeOverlayMenu === item.href ? null : item.href),
+                    }
+                  : {})}
               />
             );
           }

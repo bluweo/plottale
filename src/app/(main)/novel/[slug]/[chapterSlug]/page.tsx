@@ -223,18 +223,88 @@ function ChapterSidebar({
   currentNumber,
   settings,
   onSettingsChange,
+  externalOpen,
+  externalTab,
+  onExternalClose,
 }: {
   novel: PlottaleNovel;
   chapters: PlottaleChapter[];
   currentNumber: number;
   settings: ReadingSettings;
   onSettingsChange: (s: ReadingSettings) => void;
+  externalOpen?: boolean;
+  externalTab?: "contents" | "settings";
+  onExternalClose?: () => void;
 }) {
   const { t, lang } = useLanguage();
   const lhref = useLocalizedHref();
-  const [tab, setTab] = useState<"contents" | "settings">("contents");
-  const [panelOpen, setPanelOpen] = useState(false);
+
+  /* ── Desktop detection — ball only on lg+ ── */
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  const [tab, setTabRaw] = useState<"contents" | "settings">("contents");
+  const setTab = useCallback((t: "contents" | "settings") => {
+    setTabRaw(t);
+    // Re-clamp panel after tab switch (content height changes)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setPanelPos((p) => {
+          if (!p) return p;
+          const ph = panelRef.current?.offsetHeight || 420;
+          const gap = 8;
+          return {
+            x: Math.max(gap, Math.min(p.x, window.innerWidth - panelW - gap)),
+            y: Math.max(gap, Math.min(p.y, window.innerHeight - ph - gap)),
+          };
+        });
+      });
+    });
+  }, []);
+  const [panelOpen, setPanelOpenRaw] = useState(false);
   const [chaptersExpanded, setChaptersExpanded] = useState(true);
+
+  /* Wrap setPanelOpen to notify parent on close */
+  const setPanelOpen = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
+    setPanelOpenRaw((prev) => {
+      const next = typeof v === "function" ? v(prev) : v;
+      if (!next && onExternalClose) onExternalClose();
+      return next;
+    });
+  }, [onExternalClose]);
+
+  /* Handle external open trigger (from footer bar) */
+  useEffect(() => {
+    if (externalOpen) {
+      if (externalTab) setTabRaw(externalTab);
+      setPanelOpenRaw(true);
+      // Position panel centered above footer bar on mobile
+      if (!isDesktop) {
+        const vw = window.innerWidth;
+        const mobileW = Math.min(360, vw - 24);
+        // Use rAF to measure actual panel height after render
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const ph = panelRef.current?.offsetHeight || 520;
+            const footerH = 56;
+            const gap = 12;
+            setPanelPos({
+              x: Math.round((vw - mobileW) / 2),
+              y: Math.max(gap, window.innerHeight - ph - footerH - gap),
+            });
+          });
+        });
+      }
+    } else if (externalOpen === false) {
+      setPanelOpenRaw(false);
+    }
+  }, [externalOpen, externalTab, isDesktop]);
 
   /* ── Shared refs ── */
   const iconSize = 48;
@@ -250,27 +320,45 @@ function ChapterSidebar({
   /* ── Icon position (used when panel is closed) ── */
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
+  /* ── Store ratio for relative resize ── */
+  const posRatio = useRef<{ rx: number; ry: number }>({ rx: 0.9, ry: 0.85 });
+
   /* ── Panel position (independent, used when panel is open) ── */
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
 
+  /* Helper: pixel position → ratio */
+  const toRatio = useCallback((x: number, y: number) => ({
+    rx: window.innerWidth > 0 ? x / window.innerWidth : 0.9,
+    ry: window.innerHeight > 0 ? y / window.innerHeight : 0.85,
+  }), []);
+
+  /* Helper: ratio → clamped pixel position */
+  const fromRatio = useCallback((rx: number, ry: number) => ({
+    x: Math.max(edgeGap, Math.min(rx * window.innerWidth, window.innerWidth - iconSize - edgeGap)),
+    y: Math.max(edgeGap, Math.min(ry * window.innerHeight, window.innerHeight - iconSize - edgeGap)),
+  }), []);
+
   /* Load saved icon position — default to bottom-right with gap */
   useEffect(() => {
-    const defaultPos = { x: window.innerWidth - iconSize - edgeGap, y: window.innerHeight - iconSize - edgeGap };
+    const defaultRatio = { rx: 0.9, ry: 0.85 };
     try {
       const raw = localStorage.getItem(SIDEBAR_POS_KEY);
       if (raw) {
         const saved = JSON.parse(raw);
-        setPos({
-          x: Math.max(edgeGap, Math.min(saved.x, window.innerWidth - iconSize - edgeGap)),
-          y: Math.max(edgeGap, Math.min(saved.y, window.innerHeight - iconSize - edgeGap)),
-        });
+        // Support both old pixel format and new ratio format
+        if (saved.rx !== undefined) {
+          posRatio.current = { rx: saved.rx, ry: saved.ry };
+        } else {
+          posRatio.current = toRatio(saved.x, saved.y);
+        }
       } else {
-        setPos(defaultPos);
+        posRatio.current = defaultRatio;
       }
     } catch {
-      setPos(defaultPos);
+      posRatio.current = defaultRatio;
     }
-  }, []);
+    setPos(fromRatio(posRatio.current.rx, posRatio.current.ry));
+  }, [toRatio, fromRatio]);
 
   /* Clamp helper — keep icon fully within viewport with gap */
   const clampIcon = useCallback((x: number, y: number) => ({
@@ -281,11 +369,33 @@ function ChapterSidebar({
   /* Clamp helper — keep panel within viewport */
   const clampPanel = useCallback((x: number, y: number) => {
     const gap = 8;
+    const ph = panelRef.current?.offsetHeight || 420;
     return {
       x: Math.max(gap, Math.min(x, window.innerWidth - panelW - gap)),
-      y: Math.max(gap, Math.min(y, window.innerHeight - gap)),
+      y: Math.max(gap, Math.min(y, window.innerHeight - ph - gap)),
     };
   }, []);
+
+  /* Re-position icon + panel on window resize using stored ratio */
+  useEffect(() => {
+    const onResize = () => {
+      // Recompute icon position from stored ratio
+      setPos(fromRatio(posRatio.current.rx, posRatio.current.ry));
+      if (panelOpen && panelRef.current) {
+        setPanelPos((p) => {
+          if (!p) return p;
+          const ph = panelRef.current?.offsetHeight || 420;
+          const gap = 8;
+          return {
+            x: Math.max(gap, Math.min(p.x, window.innerWidth - panelW - gap)),
+            y: Math.max(gap, Math.min(p.y, window.innerHeight - ph - gap)),
+          };
+        });
+      }
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [fromRatio, panelOpen]);
 
   /* ── Icon pointer handlers ── */
   const onPointerDown = useCallback((e: React.PointerEvent) => {
@@ -313,11 +423,14 @@ function ChapterSidebar({
     if (!dragging.current) return;
     dragging.current = false;
     setPos((p) => {
-      if (p) try { localStorage.setItem(SIDEBAR_POS_KEY, JSON.stringify(p)); } catch { /* */ }
+      if (p) {
+        posRatio.current = toRatio(p.x, p.y);
+        try { localStorage.setItem(SIDEBAR_POS_KEY, JSON.stringify(posRatio.current)); } catch { /* */ }
+      }
       return p;
     });
     if (!dragMoved.current) setPanelOpen((o) => !o);
-  }, []);
+  }, [toRatio]);
 
   /* ── Panel drag handlers (moves panelPos directly) ── */
   const onPanelPointerDown = useCallback((e: React.PointerEvent) => {
@@ -352,7 +465,8 @@ function ChapterSidebar({
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const gap = 16;
-    const estH = panelRef.current?.offsetHeight || 420;
+    // Use a generous estimate for Settings tab (taller than Contents)
+    const estH = 520;
 
     const iconCenterX = pos.x + iconSize / 2;
     const iconCenterY = pos.y + iconSize / 2;
@@ -379,8 +493,10 @@ function ChapterSidebar({
   }, [panelOpen]);
 
   /* ── Panel style from panelPos ── */
+  const maxPanelH = typeof window !== "undefined" ? window.innerHeight - 32 : 600;
+  const effectivePanelW = isDesktop ? panelW : Math.min(360, (typeof window !== "undefined" ? window.innerWidth : 375) - 24);
   const panelStyle: React.CSSProperties = panelPos
-    ? { position: "fixed", top: panelPos.y, left: panelPos.x, width: panelW, zIndex: 41 }
+    ? { position: "fixed", top: panelPos.y, left: panelPos.x, width: effectivePanelW, zIndex: 41, maxHeight: maxPanelH, overflowY: "auto" }
     : { display: "none" };
 
   if (!pos) return null;
@@ -395,8 +511,8 @@ function ChapterSidebar({
         }
       `}</style>
 
-      {/* ── Floating icon (hidden when panel is open) ── */}
-      {!panelOpen && (
+      {/* ── Floating icon (desktop only, hidden when panel is open) ── */}
+      {!panelOpen && isDesktop && (
         <div
           ref={elRef}
           className="flex fixed z-40 items-center justify-center w-12 h-12 rounded-full cursor-grab active:cursor-grabbing select-none hover:scale-105"
@@ -472,7 +588,8 @@ function ChapterSidebar({
                   /* Snap icon back to bottom-right with gap */
                   const bottomRight = { x: window.innerWidth - iconSize - 48, y: window.innerHeight - iconSize - 48 };
                   setPos(bottomRight);
-                  try { localStorage.setItem(SIDEBAR_POS_KEY, JSON.stringify(bottomRight)); } catch { /* */ }
+                  posRatio.current = toRatio(bottomRight.x, bottomRight.y);
+                  try { localStorage.setItem(SIDEBAR_POS_KEY, JSON.stringify(posRatio.current)); } catch { /* */ }
                 }}
                 className="p-1.5 rounded-full bg-neutral-100/70 dark:bg-white/10 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-200/70 dark:hover:bg-white/15 transition-all cursor-pointer"
                 title={t("pt.reader.collapse")}
@@ -890,10 +1007,6 @@ function ReadingSettingsPanel({
 }) {
   const { t } = useLanguage();
 
-  const updateTheme = (theme: ThemeKey) => onChange({ ...settings, theme });
-  const updateFont = (font: FontKey) => onChange({ ...settings, font });
-  const updateSize = (fontSize: number) => onChange({ ...settings, fontSize });
-
   return (
     <div
       className="fixed bottom-[56px] left-0 right-0 z-[52] transition-all duration-300 pointer-events-none"
@@ -903,57 +1016,116 @@ function ReadingSettingsPanel({
       }}
     >
       <div
-        className="max-w-lg mx-auto mx-4 md:mx-auto p-5 pointer-events-auto"
+        className="mx-3 md:mx-auto p-5 pointer-events-auto overflow-y-auto"
         style={{
           ...GLASS_STYLE,
           borderRadius: "20px 20px 0 0",
           background: "rgba(var(--glass-bg-rgb, 255,255,255), 0.92)",
           backdropFilter: "blur(24px) saturate(1.8)",
           WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+          maxHeight: "calc(100vh - 120px)",
+          maxWidth: 480,
         }}
       >
-        {/* Theme row */}
+        {/* Font size */}
         <div className="mb-5">
           <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 block mb-3">
-            {t("pt.reader.theme")}
+            {t("pt.reader.fontSize")}
           </label>
-          <div className="flex gap-2 flex-wrap">
-            {READING_THEMES.map((th) => (
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-neutral-400" style={{ fontFamily: FONT_FAMILIES[settings.font] }}>Aa</span>
+            <input
+              type="range"
+              min={14}
+              max={28}
+              step={2}
+              value={settings.fontSize}
+              onChange={(e) => onChange({ ...settings, fontSize: Number(e.target.value) })}
+              className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+              style={{
+                background: `linear-gradient(90deg, #f59e0b ${((settings.fontSize - 14) / 14) * 100}%, rgba(150,150,150,0.3) ${((settings.fontSize - 14) / 14) * 100}%)`,
+              }}
+            />
+            <span className="text-base font-bold text-neutral-400" style={{ fontFamily: FONT_FAMILIES[settings.font] }}>Aa</span>
+          </div>
+          <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-1.5 text-center">
+            {settings.fontSize}px
+          </p>
+        </div>
+
+        {/* Font weight */}
+        <div className="mb-5">
+          <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 block mb-3">
+            {t("pt.reader.fontWeight")}
+          </label>
+          <div className="grid grid-cols-4 gap-1">
+            {(Object.keys(FONT_WEIGHTS) as FontWeightKey[]).map((wk) => (
               <button
-                key={th.key}
-                onClick={() => updateTheme(th.key)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                  settings.theme === th.key
-                    ? "ring-2 ring-amber-500 ring-offset-1 dark:ring-offset-neutral-900"
-                    : "hover:bg-neutral-100/50 dark:hover:bg-white/10"
+                key={wk}
+                onClick={() => onChange({ ...settings, fontWeight: wk })}
+                className={`py-1.5 text-[11px] transition-all cursor-pointer text-center rounded-md ${
+                  settings.fontWeight === wk
+                    ? "text-white dark:text-neutral-900 bg-neutral-800 dark:bg-white"
+                    : "text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100/50 dark:hover:bg-white/10"
                 }`}
-                style={{
-                  background: th.key === "default" ? undefined : th.bg,
-                  color: th.key === "default" ? undefined : th.text,
-                }}
+                style={{ fontWeight: FONT_WEIGHTS[wk] }}
               >
-                {t(`pt.reader.theme.${th.key}`)}
+                {t(`pt.reader.weight.${wk}`)}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Font row */}
+        {/* Reading theme — circles */}
         <div className="mb-5">
+          <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 block mb-3">
+            {t("pt.reader.theme")}
+          </label>
+          <div className="flex flex-wrap gap-2.5 justify-center">
+            {READING_THEMES.map((th) => {
+              const isActive = settings.theme === th.key;
+              const circleBg = th.key === "default" ? "#ffffff" : th.bg;
+              const isDark = th.key === "night" || th.key === "dark";
+              return (
+                <button
+                  key={th.key}
+                  onClick={() => onChange({ ...settings, theme: th.key })}
+                  className="relative w-10 h-10 rounded-full transition-all cursor-pointer hover:scale-110"
+                  style={{
+                    background: circleBg,
+                    border: isActive
+                      ? "2.5px solid #f59e0b"
+                      : isDark
+                        ? "1.5px solid rgba(255,255,255,0.15)"
+                        : "1.5px solid rgba(0,0,0,0.1)",
+                    boxShadow: isActive ? "0 0 0 2px rgba(245,158,11,0.25)" : "none",
+                  }}
+                  title={t(`pt.reader.theme.${th.key}`)}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Font family — 2-col grid */}
+        <div className="mb-4">
           <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 block mb-3">
             {t("pt.reader.fontFamily")}
           </label>
-          <div className="flex gap-2 flex-wrap">
+          <div className="grid grid-cols-2 gap-1.5">
             {(Object.keys(FONT_FAMILIES) as FontKey[]).map((fk) => (
               <button
                 key={fk}
-                onClick={() => updateFont(fk)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                onClick={() => onChange({ ...settings, font: fk })}
+                className={`py-2.5 px-3 text-[13px] transition-all cursor-pointer text-center ${
                   settings.font === fk
-                    ? "ring-2 ring-amber-500 ring-offset-1 dark:ring-offset-neutral-900"
-                    : "hover:bg-neutral-100/50 dark:hover:bg-white/10"
+                    ? "font-bold text-white dark:text-neutral-900 bg-neutral-800 dark:bg-white"
+                    : "font-medium text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100/50 dark:hover:bg-white/10"
                 }`}
-                style={{ fontFamily: FONT_FAMILIES[fk] }}
+                style={{
+                  fontFamily: FONT_FAMILIES[fk],
+                  borderRadius: "var(--glass-radius, 12px)",
+                }}
               >
                 {t(`pt.reader.font.${fk}`)}
               </button>
@@ -961,28 +1133,13 @@ function ReadingSettingsPanel({
           </div>
         </div>
 
-        {/* Font size slider */}
-        <div>
-          <label className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 block mb-3">
-            {t("pt.reader.fontSize")} — {settings.fontSize}px
-          </label>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-neutral-400">A</span>
-            <input
-              type="range"
-              min={14}
-              max={28}
-              step={2}
-              value={settings.fontSize}
-              onChange={(e) => updateSize(Number(e.target.value))}
-              className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
-              style={{
-                background: `linear-gradient(90deg, #f59e0b ${((settings.fontSize - 14) / 14) * 100}%, rgba(150,150,150,0.3) ${((settings.fontSize - 14) / 14) * 100}%)`,
-              }}
-            />
-            <span className="text-base text-neutral-400 font-bold">A</span>
-          </div>
-        </div>
+        {/* Reset */}
+        <button
+          onClick={() => onChange(DEFAULT_SETTINGS)}
+          className="w-full pt-3 text-xs text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors cursor-pointer border-t border-neutral-200/50 dark:border-white/8"
+        >
+          {t("pt.reader.reset")}
+        </button>
       </div>
     </div>
   );
@@ -1086,6 +1243,7 @@ function ReadingSettingsBar({
             </span>
           )}
           <button
+            data-settings-toggle
             onClick={onToggleSettings}
             className={`p-2 rounded-lg transition-colors cursor-pointer ${
               settingsOpen
@@ -1277,10 +1435,22 @@ export default function ChapterReadingPage() {
     ? getChapterByNovelIdAndNumber(novel.id, chapterNumber)
     : undefined;
 
+  // Track scroll to make paper opaque when reading
+  const [paperOpaque, setPaperOpaque] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setPaperOpaque(window.scrollY > 150);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   // Reading settings
   const [settings, setSettings] = useState<ReadingSettings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [contentsOpen, setContentsOpen] = useState(false);
+
+  /* Unified sidebar state for mobile footer bar triggers */
+  const [sidebarExternalOpen, setSidebarExternalOpen] = useState(false);
+  const [sidebarExternalTab, setSidebarExternalTab] = useState<"contents" | "settings">("settings");
 
 
   // Load settings from localStorage
@@ -1309,7 +1479,8 @@ export default function ChapterReadingPage() {
           window.location.href = `/novel/${slug}/chapter-${next.number}`;
         }
       } else if (e.key === "Escape") {
-        if (settingsOpen) setSettingsOpen(false);
+        if (sidebarExternalOpen) setSidebarExternalOpen(false);
+        else if (settingsOpen) setSettingsOpen(false);
         else if (contentsOpen) setContentsOpen(false);
       }
     };
@@ -1338,15 +1509,23 @@ export default function ChapterReadingPage() {
 
   if (!novel || !chapter) return <ReaderNotFound />;
 
-  const { transparency } = useAppearance();
+  const { transparency, theme: appTheme } = useAppearance();
   const activeTheme = READING_THEMES.find((t) => t.key === settings.theme) ?? READING_THEMES[0];
   const isCustomTheme = settings.theme !== "default";
 
   /* Paper bg — blend reading-theme color with Appearance transparency.
      For "default" theme, use the glass CSS variable directly.
-     For custom themes, convert their hex bg to rgba with the transparency value. */
+     For custom themes, convert their hex bg to rgba with the transparency value.
+     When scrolled past hero, go fully opaque for readability. */
+  const effectiveAlpha = paperOpaque ? 1 : transparency;
   const paperBg = (() => {
-    if (!isCustomTheme) return "var(--glass-bg)";
+    if (!isCustomTheme) {
+      if (paperOpaque) {
+        // Override CSS variable with solid color for readability
+        return appTheme === "dark" ? `rgba(30, 30, 35, ${effectiveAlpha})` : `rgba(255, 255, 255, ${effectiveAlpha})`;
+      }
+      return "var(--glass-bg)";
+    }
     const hex = activeTheme.bg;
     // Parse hex → rgb
     const match = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
@@ -1354,7 +1533,7 @@ export default function ChapterReadingPage() {
     const r = parseInt(match[1], 16);
     const g = parseInt(match[2], 16);
     const b = parseInt(match[3], 16);
-    return `rgba(${r}, ${g}, ${b}, ${transparency})`;
+    return `rgba(${r}, ${g}, ${b}, ${effectiveAlpha})`;
   })();
 
   return (
@@ -1372,7 +1551,6 @@ export default function ChapterReadingPage() {
           borderRadius: "var(--glass-radius)",
           backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
           WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
-          border: "1px solid var(--glass-border)",
           boxShadow: "var(--glass-shadow-elevated)",
           background: paperBg,
         }}
@@ -1381,41 +1559,32 @@ export default function ChapterReadingPage() {
         <ChapterNavFooter novel={novel} chapters={chapters} currentNumber={chapter.number} theme={activeTheme} isCustomTheme={isCustomTheme} />
       </div>
 
-      {/* Floating sidebar (desktop, outside main container) */}
+      {/* Unified floating sidebar — works on all screen sizes */}
       <ChapterSidebar
         novel={novel}
         chapters={chapters}
         currentNumber={chapter.number}
         settings={settings}
         onSettingsChange={updateSettings}
+        externalOpen={sidebarExternalOpen}
+        externalTab={sidebarExternalTab}
+        onExternalClose={() => setSidebarExternalOpen(false)}
       />
 
-      {/* Bottom bar */}
+      {/* Bottom bar (mobile/tablet only) */}
       <ReadingSettingsBar
         chapter={chapter}
         chapters={chapters}
         novel={novel}
-        settingsOpen={settingsOpen}
-        onToggleSettings={() => setSettingsOpen(!settingsOpen)}
-        onToggleContents={() => setContentsOpen(!contentsOpen)}
-      />
-
-      {/* Settings panel (mobile/md only, slides from bottom bar) */}
-      <div data-settings-panel className="lg:hidden">
-        <ReadingSettingsPanel
-          open={settingsOpen}
-          settings={settings}
-          onChange={updateSettings}
-        />
-      </div>
-
-      {/* Mobile contents sheet */}
-      <MobileContentsSheet
-        open={contentsOpen}
-        onClose={() => setContentsOpen(false)}
-        novel={novel}
-        chapters={chapters}
-        currentNumber={chapter.number}
+        settingsOpen={sidebarExternalOpen && sidebarExternalTab === "settings"}
+        onToggleSettings={() => {
+          setSidebarExternalTab("settings");
+          setSidebarExternalOpen((o) => !o);
+        }}
+        onToggleContents={() => {
+          setSidebarExternalTab("contents");
+          setSidebarExternalOpen((o) => !o);
+        }}
       />
 
       {/* Scroll to top */}

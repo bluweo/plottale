@@ -18,6 +18,7 @@ import {
 } from "iconsax-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { useLocalizedHref } from "@/hooks/useLocalizedHref";
+import { useBackground } from "@/context/BackgroundContext";
 import {
   type PlottaleNovel,
   type LocalizedString,
@@ -33,6 +34,16 @@ import {
 const GLASS_STYLE: React.CSSProperties = {
   borderRadius: "var(--glass-radius-lg)",
   background: "var(--glass-bg)",
+  backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+  WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
+  border: "1px solid var(--glass-border)",
+  boxShadow: "var(--glass-shadow)",
+};
+
+/** Inner-card glass — +20% opacity vs section wrapper, capped at 100% */
+const GLASS_STYLE_INNER: React.CSSProperties = {
+  borderRadius: "var(--glass-radius-lg)",
+  background: "var(--glass-bg-strong)",
   backdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
   WebkitBackdropFilter: "blur(var(--glass-blur)) saturate(var(--glass-saturation))",
   border: "1px solid var(--glass-border)",
@@ -155,7 +166,7 @@ function ImageCarousel({
       </div>
 
       {totalSlides > 1 && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
           {images.map((_, idx) => (
             <button
               key={idx}
@@ -202,22 +213,6 @@ function NovelCard({ novel, index }: { novel: PlottaleNovel; index: number }) {
   const lhref = useLocalizedHref();
   const [hovered, setHovered] = useState(false);
 
-  const [isDark, setIsDark] = useState(false);
-  useEffect(() => {
-    const check = () => setIsDark(document.documentElement.classList.contains("dark"));
-    check();
-    const obs = new MutationObserver(check);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-
-  const hoverBg = hovered
-    ? isDark ? "rgba(255,255,255,0.95)" : "rgba(15,15,20,0.95)"
-    : undefined;
-  const hoverTitle = hovered
-    ? isDark ? "#111827" : "#ffffff"
-    : undefined;
-
   return (
     <Link
       href={lhref(`/novel/${novel.slug}`)}
@@ -232,48 +227,13 @@ function NovelCard({ novel, index }: { novel: PlottaleNovel; index: number }) {
       <div
         className="overflow-hidden flex flex-col transition-all duration-500 ease-out"
         style={{
-          ...GLASS_STYLE,
+          ...GLASS_STYLE_INNER,
           border: "none",
           transform: hovered ? "scale(1.3)" : "scale(1)",
           transformOrigin: "center center",
-          ...(hoverBg ? { background: hoverBg } : {}),
         }}
       >
-        {/* Arrow icon on hover */}
-        <div
-          className="absolute top-0 right-0 transition-all duration-500 ease-out z-30"
-          style={{
-            paddingTop: "calc(10px + var(--glass-radius-lg) * 0.4)",
-            paddingRight: "calc(10px + var(--glass-radius-lg) * 0.4)",
-            opacity: hovered ? 1 : 0,
-            transform: hovered ? "translate(0,0) scale(1)" : "translate(-4px,4px) scale(0.5)",
-          }}
-        >
-          <ExportSquare size={22} variant="Linear" color={hoverTitle ?? "currentColor"} />
-        </div>
-
-        {/* Title */}
-        <div
-          className="text-left"
-          style={{
-            paddingTop: "calc(10px + var(--glass-radius-lg) * 0.4)",
-            paddingBottom: "calc(6px + var(--glass-radius-lg) * 0.15)",
-            paddingLeft: "calc(16px + var(--glass-radius-lg) * 0.5)",
-            paddingRight: "calc(16px + var(--glass-radius-lg) * 0.5)",
-          }}
-        >
-          <h3
-            className="text-[17px] md:text-[18px] font-[750] text-gray-900 dark:text-white leading-[1.25] tracking-[-0.02em] line-clamp-1 transition-colors duration-300"
-            style={{
-              ...(hoverTitle ? { color: hoverTitle } : {}),
-              ...(lang === "th" ? THAI_HEADER_STYLE : {}),
-            }}
-          >
-            {localize(novel.title, lang)}
-          </h3>
-        </div>
-
-        {/* Image carousel + hover overlay */}
+        {/* ── Image carousel + hover overlay ── */}
         <div className="relative">
           <ImageCarousel
             images={novel.images}
@@ -281,16 +241,27 @@ function NovelCard({ novel, index }: { novel: PlottaleNovel; index: number }) {
             title={localize(novel.title, lang)}
           />
 
-          {/* Hover overlay */}
+          {/* Hover overlay: title + author + genres + rating + synopsis */}
           <div
             className="absolute inset-x-0 top-0 z-20 transition-all duration-500 ease-out pointer-events-none"
             style={{
               background: "linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.72) 55%, rgba(0,0,0,0.4) 80%, transparent 100%)",
-              padding: "10px 12px 36px",
+              padding: "20px 12px 36px",
               opacity: hovered ? 1 : 0,
               transform: hovered ? "translateY(0)" : "translateY(-8px)",
             }}
           >
+            {/* Title + arrow */}
+            <div className="flex items-center justify-between mb-1.5">
+              <h3
+                className="text-[16px] font-[750] text-white leading-[1.25] tracking-[-0.02em] line-clamp-1"
+                style={lang === "th" ? THAI_HEADER_STYLE : undefined}
+              >
+                {localize(novel.title, lang)}
+              </h3>
+              <ExportSquare size={18} variant="Linear" color="rgba(255,255,255,0.8)" />
+            </div>
+
             {/* Author */}
             <div className="flex items-center gap-2 mb-2">
               <div className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 ring-1 ring-white/20">
@@ -461,193 +432,202 @@ function FilterModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center">
+    <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center" onClick={onClose}>
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-[var(--glass-blur-overlay)]" />
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-[560px] max-h-[85vh] md:max-h-[80vh] bg-white dark:bg-neutral-900 md:rounded-2xl rounded-t-2xl overflow-hidden flex flex-col shadow-2xl"
-        style={{ animation: "modalSlideUp 0.35s cubic-bezier(0.16,1,0.3,1) both" }}
+        className="glass-panel relative w-full max-w-[560px] max-h-[85vh] md:max-h-[80vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+        style={{ animation: "panelEnter 250ms var(--transition-apple) both" }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 dark:border-white/10">
+        <div className="flex items-center justify-between px-6 py-4">
           <h2 className="text-[18px] font-[700] text-gray-900 dark:text-white" style={lang === "th" ? THAI_HEADER_STYLE : undefined}>
             {t("pt.library.filters")}
           </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            <CloseCircle size={20} variant="Linear" className="text-neutral-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLocal({ genres: new Set(), authors: new Set(), contentRatings: new Set(), minRating: 0, hasTrailer: false })}
+              className="px-3 py-1.5 rounded-full text-[12px] font-[600] text-neutral-500 dark:text-neutral-400 border border-neutral-300/60 dark:border-neutral-500/40 hover:text-gray-900 dark:hover:text-white hover:border-neutral-500 dark:hover:border-neutral-300 transition-colors cursor-pointer"
+            >
+              Reset
+            </button>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors cursor-pointer"
+            >
+              <CloseCircle size={20} variant="Linear" color="currentColor" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-7">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {/* ── Genre ── */}
           <div>
             <h3 className="text-[14px] font-[700] text-gray-900 dark:text-white mb-3">{t("pt.library.genre")}</h3>
-            <div className="flex flex-wrap gap-2">
-              {ALL_GENRES.map((g) => {
-                const active = local.genres.has(g.en);
-                return (
-                  <button
-                    key={g.en}
-                    onClick={() => toggleSet(setLocal, "genres", g.en)}
-                    className={`px-3.5 py-2 rounded-xl text-[13px] font-[600] transition-all duration-200 cursor-pointer border ${
-                      active
-                        ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white"
-                        : "bg-transparent text-gray-700 dark:text-neutral-300 border-neutral-300 dark:border-neutral-600 hover:border-gray-900 dark:hover:border-white"
-                    }`}
-                  >
-                    {localize(g, lang)}
-                  </button>
-                );
-              })}
+            <div className="pt-0">
+              <div className="flex flex-wrap gap-2">
+                {/* "All" chip */}
+                <button
+                  onClick={() => setLocal((prev) => ({ ...prev, genres: new Set() }))}
+                  className={`px-3.5 py-2 rounded-full text-[13px] font-[600] transition-all duration-200 cursor-pointer border-2 ${
+                    local.genres.size === 0
+                      ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white"
+                      : "bg-transparent text-gray-700 dark:text-neutral-300 border-black/25 dark:border-white/20 hover:border-gray-900 dark:hover:border-white"
+                  }`}
+                >
+                  {t("pt.library.all")}
+                </button>
+                {ALL_GENRES.map((g) => {
+                  const active = local.genres.has(g.en);
+                  return (
+                    <button
+                      key={g.en}
+                      onClick={() => toggleSet(setLocal, "genres", g.en)}
+                      className={`px-3.5 py-2 rounded-full text-[13px] font-[600] transition-all duration-200 cursor-pointer border-2 ${
+                        active
+                          ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white"
+                          : "bg-transparent text-gray-700 dark:text-neutral-300 border-black/25 dark:border-white/20 hover:border-gray-900 dark:hover:border-white"
+                      }`}
+                    >
+                      {localize(g, lang)}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-
-          <div className="border-t border-neutral-200 dark:border-white/10" />
 
           {/* ── Authors ── */}
           <div>
             <h3 className="text-[14px] font-[700] text-gray-900 dark:text-white mb-3">{t("pt.library.authors")}</h3>
-            <div className="grid grid-cols-3 gap-2">
-              {authors.map((a) => {
-                const key = a.name.en;
-                const active = local.authors.has(key);
-                return (
-                  <button
-                    key={key}
-                    onClick={() => toggleSet(setLocal, "authors", key)}
-                    className={`flex flex-col items-center gap-2 p-3 rounded-xl text-center transition-all duration-200 cursor-pointer border ${
-                      active
-                        ? "bg-gray-900 dark:bg-white border-gray-900 dark:border-white"
-                        : "bg-transparent border-neutral-200 dark:border-neutral-700 hover:border-gray-900 dark:hover:border-white"
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-neutral-900 ${
-                      active ? "ring-current" : "ring-transparent"
-                    }`}
+            <div className="pt-0">
+              <div className="grid grid-cols-3 gap-2">
+                {authors.map((a) => {
+                  const key = a.name.en;
+                  const active = local.authors.has(key);
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => toggleSet(setLocal, "authors", key)}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-[var(--glass-radius-sm)] text-center transition-all duration-200 cursor-pointer border-2 ${
+                        active
+                          ? "bg-gray-900 dark:bg-white border-gray-900 dark:border-white"
+                          : "bg-transparent border-black/20 dark:border-white/15 hover:border-gray-900 dark:hover:border-white"
+                      }`}
                     >
-                      <Image src={a.avatar} alt={localize(a.name, lang)} width={40} height={40} className="w-full h-full object-cover" />
-                    </div>
-                    <span className={`text-[11px] font-[600] leading-tight truncate w-full ${
-                      active ? "text-white dark:text-gray-900" : "text-gray-700 dark:text-neutral-300"
-                    }`}>
-                      {localize(a.name, lang)}
-                    </span>
-                  </button>
-                );
-              })}
+                      <div className={`w-10 h-10 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-offset-1 ring-offset-white dark:ring-offset-neutral-900 ${
+                        active ? "ring-current" : "ring-transparent"
+                      }`}
+                      >
+                        <Image src={a.avatar} alt={localize(a.name, lang)} width={40} height={40} className="w-full h-full object-cover" />
+                      </div>
+                      <span className={`text-[11px] font-[600] leading-tight truncate w-full ${
+                        active ? "text-white dark:text-gray-900" : "text-gray-700 dark:text-neutral-300"
+                      }`}>
+                        {localize(a.name, lang)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-
-          <div className="border-t border-neutral-200 dark:border-white/10" />
 
           {/* ── Content Rating ── */}
           <div>
             <h3 className="text-[14px] font-[700] text-gray-900 dark:text-white mb-3">{t("pt.library.contentRating")}</h3>
-            <div className="flex gap-2">
-              {CONTENT_RATINGS.map((r) => {
-                const active = local.contentRatings.has(r);
-                return (
-                  <button
-                    key={r}
-                    onClick={() => toggleSet(setLocal, "contentRatings", r)}
-                    className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-xl text-center transition-all duration-200 cursor-pointer border ${
-                      active
-                        ? "bg-gray-900 dark:bg-white border-gray-900 dark:border-white"
-                        : "bg-transparent border-neutral-200 dark:border-neutral-700 hover:border-gray-900 dark:hover:border-white"
-                    }`}
-                  >
-                    <span className={`text-[14px] font-[700] ${active ? "text-white dark:text-gray-900" : "text-gray-900 dark:text-white"}`}>{r}</span>
-                    <span className={`text-[11px] ${active ? "text-white/70 dark:text-gray-900/60" : "text-neutral-400"}`}>
-                      {contentRatingCounts[r]} novels
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="pt-0">
+              <div className="flex gap-2">
+                {CONTENT_RATINGS.map((r) => {
+                  const active = local.contentRatings.has(r);
+                  return (
+                    <button
+                      key={r}
+                      onClick={() => toggleSet(setLocal, "contentRatings", r)}
+                      className={`flex-1 flex flex-col items-center gap-1 py-3 rounded-[var(--glass-radius-sm)] text-center transition-all duration-200 cursor-pointer border-2 ${
+                        active
+                          ? "bg-gray-900 dark:bg-white border-gray-900 dark:border-white"
+                          : "bg-transparent border-black/20 dark:border-white/15 hover:border-gray-900 dark:hover:border-white"
+                      }`}
+                    >
+                      <span className={`text-[14px] font-[700] ${active ? "text-white dark:text-gray-900" : "text-gray-900 dark:text-white"}`}>{r}</span>
+                      <span className={`text-[11px] ${active ? "text-white/70 dark:text-gray-900/60" : "text-neutral-400"}`}>
+                        {contentRatingCounts[r]} novels
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-
-          <div className="border-t border-neutral-200 dark:border-white/10" />
 
           {/* ── Minimum Rating ── */}
           <div>
             <h3 className="text-[14px] font-[700] text-gray-900 dark:text-white mb-3">{t("pt.library.minRating")}</h3>
-            <div className="flex gap-2">
-              {RATING_THRESHOLDS.map((r) => {
-                const active = local.minRating === r;
-                const label = r === 0 ? t("pt.library.any") : `${r}+`;
-                return (
-                  <button
-                    key={r}
-                    onClick={() => setLocal((prev) => ({ ...prev, minRating: r }))}
-                    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-[600] transition-all duration-200 cursor-pointer border ${
-                      active
-                        ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white"
-                        : "text-gray-700 dark:text-neutral-300 border-neutral-200 dark:border-neutral-700 hover:border-gray-900 dark:hover:border-white"
-                    }`}
-                  >
-                    {r > 0 && <Star1 size={14} variant="Bold" color={active ? (undefined) : "#fbbf24"} className={active ? "text-amber-400 dark:text-amber-500" : ""} />}
-                    {label}
-                  </button>
-                );
-              })}
+            <div className="pt-0">
+              <div className="flex gap-2">
+                {RATING_THRESHOLDS.map((r) => {
+                  const active = local.minRating === r;
+                  const label = r === 0 ? t("pt.library.any") : `${r}+`;
+                  return (
+                    <button
+                      key={r}
+                      onClick={() => setLocal((prev) => ({ ...prev, minRating: r }))}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-full text-[13px] font-[600] transition-all duration-200 cursor-pointer border-2 ${
+                        active
+                          ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white"
+                          : "text-gray-700 dark:text-neutral-300 border-black/20 dark:border-white/15 hover:border-gray-900 dark:hover:border-white"
+                      }`}
+                    >
+                      {r > 0 && <Star1 size={14} variant="Bold" color={active ? (undefined) : "#fbbf24"} className={active ? "text-amber-400 dark:text-amber-500" : ""} />}
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-
-          <div className="border-t border-neutral-200 dark:border-white/10" />
 
           {/* ── Extras ── */}
           <div>
             <h3 className="text-[14px] font-[700] text-gray-900 dark:text-white mb-3">{t("pt.library.extras")}</h3>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[14px] font-[600] text-gray-900 dark:text-white">{t("pt.library.hasTrailer")}</p>
-                <p className="text-[12px] text-neutral-500 dark:text-neutral-400 mt-0.5">{t("pt.library.hasTrailerDesc")}</p>
-              </div>
-              <button
-                onClick={() => setLocal((prev) => ({ ...prev, hasTrailer: !prev.hasTrailer }))}
-                className={`relative w-12 h-7 rounded-full transition-colors duration-200 cursor-pointer flex-shrink-0 ${
-                  local.hasTrailer ? "bg-gray-900 dark:bg-white" : "bg-neutral-300 dark:bg-neutral-600"
-                }`}
-              >
-                <div
-                  className={`absolute top-0.5 w-6 h-6 rounded-full bg-white dark:bg-neutral-900 shadow-md transition-transform duration-200 ${
-                    local.hasTrailer ? "translate-x-[22px]" : "translate-x-0.5"
+            <div className="pt-0">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[14px] font-[600] text-gray-900 dark:text-white">{t("pt.library.hasTrailer")}</p>
+                  <p className="text-[12px] text-neutral-500 dark:text-neutral-400 mt-0.5">{t("pt.library.hasTrailerDesc")}</p>
+                </div>
+                <button
+                  onClick={() => setLocal((prev) => ({ ...prev, hasTrailer: !prev.hasTrailer }))}
+                  className={`relative w-12 h-7 rounded-full transition-colors duration-200 cursor-pointer flex-shrink-0 ${
+                    local.hasTrailer ? "bg-gray-900 dark:bg-white" : "bg-neutral-300 dark:bg-neutral-600"
                   }`}
-                />
-              </button>
+                >
+                  <div
+                    className={`absolute top-0.5 w-6 h-6 rounded-full bg-white dark:bg-neutral-900 shadow-md transition-transform duration-200 ${
+                      local.hasTrailer ? "translate-x-[22px]" : "translate-x-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-200 dark:border-white/10">
-          <button
-            onClick={() => setLocal({ genres: new Set(), authors: new Set(), contentRatings: new Set(), minRating: 0, hasTrailer: false })}
-            className="text-[14px] font-[600] text-gray-900 dark:text-white underline underline-offset-2 hover:opacity-70 transition-opacity cursor-pointer"
-          >
-            {t("pt.library.clearAll")}
-          </button>
+        <div className="px-6 py-4">
           <button
             onClick={() => { onApply(local); onClose(); }}
-            className="px-6 py-2.5 rounded-xl text-[14px] font-[650] text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:opacity-90 transition-opacity cursor-pointer"
+            className="w-full px-6 py-2.5 rounded-full text-[14px] font-[650] text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:opacity-90 transition-opacity cursor-pointer"
           >
             {t("pt.library.showN").replace("{n}", String(previewCount))}
           </button>
         </div>
       </div>
-
-      <style>{`
-        @keyframes modalSlideUp {
-          from { opacity: 0; transform: translateY(40px) scale(0.97); }
-          to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-      `}</style>
     </div>
   );
 }
@@ -711,6 +691,7 @@ function SortDropdown({ value, onChange }: { value: string; onChange: (v: string
 
 export default function NovelsLibraryPage() {
   const { t, lang } = useLanguage();
+  const { isDarkBg } = useBackground();
   const allNovels = useMemo(() => getAllNovels(), []);
 
   /* State */
@@ -772,12 +753,16 @@ export default function NovelsLibraryPage() {
       {/* ── Header ── */}
       <div className="px-4 md:px-8 lg:px-10 xl:px-12 pt-28 md:pt-32 lg:pt-24 pb-6 max-w-[2400px] mx-auto">
         <h1
-          className="text-[28px] md:text-[40px] font-[800] tracking-[-0.03em] text-gray-900 dark:text-white leading-tight"
+          className={`text-[28px] md:text-[40px] font-[800] tracking-[-0.03em] leading-tight ${
+            isDarkBg ? "text-white" : "text-gray-900 dark:text-white"
+          }`}
           style={lang === "th" ? THAI_HEADER_STYLE : undefined}
         >
           {t("pt.library.title")}
         </h1>
-        <p className="mt-2 text-[14px] md:text-[15px] font-[430] text-black/60 dark:text-white/60 max-w-[500px]">
+        <p className={`mt-2 text-[14px] md:text-[15px] font-[430] max-w-[500px] ${
+          isDarkBg ? "text-white/70" : "text-black/60 dark:text-white/60"
+        }`}>
           {t("pt.library.subtitle")}
         </p>
       </div>
@@ -828,89 +813,91 @@ export default function NovelsLibraryPage() {
           </button>
         </div>
 
-        {/* Genre chips row */}
-        <div
-          ref={chipScrollRef}
-          className="flex items-center gap-2 p-1 overflow-x-auto scrollbar-hide md:overflow-visible md:flex-wrap"
-        >
-          {/* "All" chip */}
-          <button
-            onClick={() => setActiveGenres(new Set())}
-            className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-[600] transition-all duration-200 cursor-pointer whitespace-nowrap ${
-              activeGenres.size === 0
-                ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-2 border-gray-900 dark:border-white"
-                : "text-gray-600 dark:text-neutral-400 border-2 border-neutral-800/15 dark:border-neutral-300/15 hover:scale-110 hover:font-[700] hover:text-gray-900 dark:hover:text-white hover:border-neutral-800 dark:hover:border-neutral-300"
-            }`}
-          >
-            {t("pt.library.all")}
-          </button>
-
-          {ALL_GENRES.map((g) => {
-            const active = activeGenres.has(g.en);
-            return (
-              <button
-                key={g.en}
-                onClick={() => toggleGenre(g.en)}
-                className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-[600] transition-all duration-200 cursor-pointer whitespace-nowrap ${
-                  active
-                    ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-2 border-gray-900 dark:border-white"
-                    : "text-gray-600 dark:text-neutral-400 border-2 border-neutral-800/15 dark:border-neutral-300/15 hover:scale-110 hover:font-[700] hover:text-gray-900 dark:hover:text-white hover:border-neutral-800 dark:hover:border-neutral-300"
-                }`}
-              >
-                {localize(g, lang)}
-              </button>
-            );
-          })}
-        </div>
-
         {/* Result count */}
-        <p className="text-[13px] font-[500] text-neutral-500 dark:text-neutral-400">
+        <p className={`text-[13px] font-[500] ${
+          isDarkBg ? "text-white/50" : "text-neutral-500 dark:text-neutral-400"
+        }`}>
           {t("pt.library.showing").replace("{n}", String(results.length))}
         </p>
       </div>
 
-      {/* ── Novel grid ── */}
+      {/* ── Glass panel: genre chips + novel grid ── */}
       <div className="px-4 md:px-8 lg:px-10 xl:px-12 max-w-[2400px] mx-auto">
-        {results.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7 gap-3 md:gap-4">
-            {results.map((novel, i) => (
-              <NovelCard key={novel.id} novel={novel} index={i} />
-            ))}
-          </div>
-        ) : (
-          /* Empty state */
-          <div className="flex flex-col items-center justify-center py-24 text-center" style={{ animation: "cardEnter 0.5s var(--ease-spring) both" }}>
-            <div
-              className="w-20 h-20 rounded-2xl flex items-center justify-center mb-5"
-              style={{ ...GLASS_STYLE, borderRadius: 20 }}
-            >
-              <Book1 size={36} variant="Bulk" className="text-neutral-300 dark:text-neutral-600" />
-            </div>
-            <h3 className="text-[18px] font-[700] text-gray-900 dark:text-white mb-2" style={lang === "th" ? THAI_HEADER_STYLE : undefined}>
-              {t("pt.library.empty")}
-            </h3>
-            <p className="text-[14px] text-neutral-500 dark:text-neutral-400 mb-6 max-w-[300px]">
-              {t("pt.library.emptyHint")}
-            </p>
+        <div style={GLASS_STYLE} className="p-5 md:p-8">
+          {/* Genre chips row */}
+          <div
+            ref={chipScrollRef}
+            className="flex items-center gap-2 p-1 overflow-x-auto scrollbar-hide md:overflow-visible md:flex-wrap mb-5 md:mb-6"
+          >
+            {/* "All" chip */}
             <button
-              onClick={clearAll}
-              className="px-5 py-2.5 rounded-xl text-[13px] font-[600] text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:opacity-90 transition-opacity cursor-pointer"
+              onClick={() => setActiveGenres(new Set())}
+              className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-[600] transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                activeGenres.size === 0
+                  ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-2 border-gray-900 dark:border-white"
+                  : "text-gray-600 dark:text-neutral-400 border-2 border-neutral-800/15 dark:border-neutral-300/15 hover:scale-110 hover:font-[700] hover:text-gray-900 dark:hover:text-white hover:border-neutral-800 dark:hover:border-neutral-300"
+              }`}
             >
-              {t("pt.library.clearAll")}
+              {t("pt.library.all")}
             </button>
+
+            {ALL_GENRES.map((g) => {
+              const active = activeGenres.has(g.en);
+              return (
+                <button
+                  key={g.en}
+                  onClick={() => toggleGenre(g.en)}
+                  className={`shrink-0 px-4 py-2 rounded-full text-[13px] font-[600] transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                    active
+                      ? "bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-2 border-gray-900 dark:border-white"
+                      : "text-gray-600 dark:text-neutral-400 border-2 border-neutral-800/15 dark:border-neutral-300/15 hover:scale-110 hover:font-[700] hover:text-gray-900 dark:hover:text-white hover:border-neutral-800 dark:hover:border-neutral-300"
+                  }`}
+                >
+                  {localize(g, lang)}
+                </button>
+              );
+            })}
           </div>
-        )}
+
+          {/* Novel grid */}
+          {results.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 min-[1920px]:grid-cols-7 gap-3 md:gap-4">
+              {results.map((novel, i) => (
+                <NovelCard key={novel.id} novel={novel} index={i} />
+              ))}
+            </div>
+          ) : (
+            /* Empty state */
+            <div className="flex flex-col items-center justify-center py-24 text-center" style={{ animation: "cardEnter 0.5s var(--ease-spring) both" }}>
+              <span className="text-gray-900 dark:text-white mb-5">
+                <Book1 size={56} variant="Bulk" color="currentColor" />
+              </span>
+              <h3 className="text-[18px] font-[700] text-gray-900 dark:text-white mb-2" style={lang === "th" ? THAI_HEADER_STYLE : undefined}>
+                {t("pt.library.empty")}
+              </h3>
+              <p className="text-[14px] text-neutral-500 dark:text-neutral-400 mb-6 max-w-[300px]">
+                {t("pt.library.emptyHint")}
+              </p>
+              <button
+                onClick={clearAll}
+                className="px-5 py-2.5 rounded-full text-[13px] font-[600] text-white bg-gray-900 dark:bg-white dark:text-gray-900 hover:opacity-90 transition-opacity cursor-pointer"
+              >
+                {t("pt.library.clearAll")}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Filter Modal ── */}
       <FilterModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        filters={filters}
+        filters={mergedFilters}
         onApply={(f) => {
           setFilters(f);
           // Sync genre chips with modal genres
-          if (f.genres.size > 0) setActiveGenres(f.genres);
+          setActiveGenres(f.genres);
         }}
         novels={allNovels}
         search={debouncedSearch}

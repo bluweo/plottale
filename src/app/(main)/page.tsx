@@ -16,8 +16,6 @@ import {
   TickCircle,
   DollarCircle,
   ArrowRight,
-  ArrowLeft2,
-  ArrowRight2,
   BookSaved,
   ExportSquare,
   Verify,
@@ -271,25 +269,30 @@ function HeroSection() {
       <div className="flex items-center gap-3 mt-8 md:mt-10">
         <Link
           href={lhref("/novels")}
-          className="h-12 px-7 rounded-full text-[14px] font-[650] text-white flex items-center gap-2 cursor-pointer hover:scale-[1.04]"
+          className="h-12 px-7 rounded-full text-[14px] font-[650] text-white flex items-center gap-2 cursor-pointer"
           style={{
             background: current.ctaGradient,
             boxShadow: `0 4px 20px ${current.ctaShadow}`,
-            transition: "background 600ms ease-out, box-shadow 600ms ease-out, transform 300ms ease-out",
+            transition: "background 600ms ease-out, box-shadow 600ms ease-out, scale 400ms cubic-bezier(0.34, 1.56, 0.64, 1)",
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.scale = "1.2")}
+          onMouseLeave={(e) => (e.currentTarget.style.scale = "1")}
         >
           {t("pt.hero.cta.explore")}
           <ArrowRight size={16} variant="Linear" color="currentColor" />
         </Link>
         <Link
           href={lhref("/create")}
-          className="h-12 px-7 rounded-full text-[14px] font-[650] flex items-center gap-2 cursor-pointer bg-transparent transition-all duration-200"
+          className="h-12 px-7 rounded-full text-[14px] font-[650] flex items-center gap-2 cursor-pointer bg-transparent"
           style={{
             color: useWhiteText ? "white" : "black",
             borderWidth: 1,
             borderStyle: "solid",
             borderColor: useWhiteText ? "rgba(255,255,255,0.6)" : "black",
+            transition: "scale 400ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 200ms ease, color 200ms ease",
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.scale = "1.2")}
+          onMouseLeave={(e) => (e.currentTarget.style.scale = "1")}
         >
           <Add size={16} variant="Linear" color="currentColor" />
           {t("pt.hero.cta.create")}
@@ -448,23 +451,6 @@ function ImageCarousel({
         </div>
       )}
 
-      {/* Nav arrows — visible on hover */}
-      {totalSlides > 1 && (
-        <>
-          <button
-            onClick={handlePrev}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/35 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 hover:bg-black/55 transition-all duration-200 cursor-pointer z-10 [&_svg]:w-[14px] [&_svg]:h-[14px]"
-          >
-            <ArrowLeft2 size={14} variant="Linear" color="white" />
-          </button>
-          <button
-            onClick={handleNext}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/35 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 hover:bg-black/55 transition-all duration-200 cursor-pointer z-10 [&_svg]:w-[14px] [&_svg]:h-[14px]"
-          >
-            <ArrowRight2 size={14} variant="Linear" color="white" />
-          </button>
-        </>
-      )}
 
     </div>
   );
@@ -503,12 +489,13 @@ function NovelCard({ novel, index }: { novel: PlottaleNovel; index: number }) {
             title={localize(novel.title, lang)}
           />
 
-          {/* Hover overlay: full title + genre tags + rating + synopsis — overlays image top, above dots (z-20) */}
+          {/* Hover overlay: title + genre tags + rating + synopsis */}
           <div
-            className="absolute inset-x-0 top-0 z-20 transition-all duration-500 ease-out pointer-events-none"
+            className="absolute inset-0 z-20 transition-all duration-500 ease-out pointer-events-none flex flex-col"
             style={{
-              background: "linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.72) 55%, rgba(0,0,0,0.4) 80%, transparent 100%)",
-              padding: "20px 12px 36px",
+              overflow: "hidden",
+              background: "linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.75) 40%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.3) 100%)",
+              padding: "20px 12px 24px",
               opacity: hovered ? 1 : 0,
               transform: hovered ? "translateY(0)" : "translateY(-8px)",
             }}
@@ -556,8 +543,10 @@ function NovelCard({ novel, index }: { novel: PlottaleNovel; index: number }) {
               </span>
             </div>
 
-            {/* Synopsis — full text */}
-            <p className="text-[12px] font-[430] text-white/75 leading-[1.5]">
+            {/* Synopsis — truncated with ellipsis, fills remaining space */}
+            <p className="text-[12px] font-[430] text-white/75 leading-[1.5] line-clamp-6"
+              style={{ WebkitLineClamp: 14 }}
+            >
               {localize(novel.synopsis, lang)}
             </p>
           </div>
