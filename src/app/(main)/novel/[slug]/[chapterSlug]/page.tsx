@@ -270,14 +270,16 @@ function ChapterSidebar({
   const [panelOpen, setPanelOpenRaw] = useState(false);
   const [chaptersExpanded, setChaptersExpanded] = useState(true);
 
-  /* Wrap setPanelOpen to notify parent on close */
-  const setPanelOpen = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
-    setPanelOpenRaw((prev) => {
-      const next = typeof v === "function" ? v(prev) : v;
-      if (!next && onExternalClose) onExternalClose();
-      return next;
-    });
-  }, [onExternalClose]);
+  /* Notify parent when panel closes */
+  const prevPanelOpen = useRef(false);
+  useEffect(() => {
+    if (prevPanelOpen.current && !panelOpen && onExternalClose) {
+      queueMicrotask(onExternalClose);
+    }
+    prevPanelOpen.current = panelOpen;
+  }, [panelOpen, onExternalClose]);
+
+  const setPanelOpen = setPanelOpenRaw;
 
   /* Handle external open trigger (from footer bar) */
   useEffect(() => {
@@ -801,7 +803,7 @@ function ChapterSidebar({
                 {/* Reset */}
                 <button
                   onClick={() => onSettingsChange(DEFAULT_SETTINGS)}
-                  className="w-full pt-3 mt-1 text-xs text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors cursor-pointer border-t border-neutral-200/50 dark:border-white/8"
+                  className="w-full mt-3 py-1.5 text-xs text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors cursor-pointer border border-neutral-300/60 dark:border-white/15 rounded-full bg-transparent"
                 >
                   {t("pt.reader.reset")}
                 </button>
@@ -1136,7 +1138,7 @@ function ReadingSettingsPanel({
         {/* Reset */}
         <button
           onClick={() => onChange(DEFAULT_SETTINGS)}
-          className="w-full pt-3 text-xs text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors cursor-pointer border-t border-neutral-200/50 dark:border-white/8"
+          className="w-full mt-3 py-1.5 text-xs text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors cursor-pointer border border-neutral-300/60 dark:border-white/15 rounded-full bg-transparent"
         >
           {t("pt.reader.reset")}
         </button>
